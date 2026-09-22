@@ -168,7 +168,7 @@ button { font: inherit; }
 }
 
 .app[data-mode="weather"] .ambient-weather {
-  opacity: .34;
+  opacity: .58;
 }
 
 .dream-canvas {
@@ -182,6 +182,7 @@ button { font: inherit; }
 
 .dream-canvas.show {
   opacity: 1;
+  animation: dream-breathe 7s ease-in-out infinite;
 }
 
 .clock.hidden-for-special {
@@ -287,7 +288,7 @@ button { font: inherit; }
 .weather-icon {
   transform-box: fill-box;
   transform-origin: center;
-  animation: weather-float 4.8s ease-in-out infinite;
+  animation: weather-float 3.6s ease-in-out infinite;
 }
 
 .weather-cloud {
@@ -612,13 +613,13 @@ button { font: inherit; }
 }
 
 @keyframes weather-float {
-  0%,100% { transform: translateY(2px) scale(.98); opacity: .78; }
-  50% { transform: translateY(-7px) scale(1.025); opacity: 1; }
+  0%,100% { transform: translateY(4px) scale(.96); opacity: .68; }
+  50% { transform: translateY(-11px) scale(1.06); opacity: 1; }
 }
 
 @keyframes weather-cloud-breathe {
-  0%,100% { transform: translateX(-3px) scale(.98); opacity: .72; }
-  50% { transform: translateX(5px) scale(1.035); opacity: 1; }
+  0%,100% { transform: translateX(-7px) scale(.95); opacity: .58; }
+  50% { transform: translateX(9px) scale(1.07); opacity: 1; }
 }
 
 @keyframes weather-sun-orbit {
@@ -689,8 +690,13 @@ button { font: inherit; }
 }
 
 @keyframes ambient-cloud {
-  from { transform: translate3d(-18vw,20vh,0); }
-  to { transform: translate3d(118vw,25vh,0); }
+  from { transform: translate3d(-20vw,14vh,0); }
+  to { transform: translate3d(120vw,32vh,0); }
+}
+
+@keyframes dream-breathe {
+  0%,100% { filter: brightness(.85); transform: scale(.99); }
+  50% { filter: brightness(1.15); transform: scale(1.015); }
 }
 
 @media (max-width: 940px) {
