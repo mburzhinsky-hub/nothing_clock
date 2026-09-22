@@ -1,9 +1,9 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const STYLES = ["dot", "segment", "hybrid", "wire", "stencil"];
-const MODES = ["clock", "date", "weather", "timer", "focus", "launcher", "dream"];
+const MODES = ["clock", "date", "weather", "timer", "focus", "dream"];
 const STYLE_LABELS = { dot:"Dot Matrix", segment:"Segment", hybrid:"Hybrid", wire:"Wire", stencil:"Stencil" };
-const MODE_LABELS = { clock:"CLOCK", date:"DATE", weather:"WEATHER", timer:"TIMER", focus:"FOCUS", launcher:"LAUNCHER", dream:"DREAM" };
+const MODE_LABELS = { clock:"CLOCK", date:"DATE", weather:"WEATHER", timer:"TIMER", focus:"FOCUS", dream:"DREAM" };
 
 const app = document.getElementById("app");
 const stage = document.getElementById("stage");
@@ -93,6 +93,9 @@ let dreamMode = 0;
 let dreamFrame = 0;
 let dreamParticles = [];
 let dreamLastTimeKey = "";
+let dreamTargetKey = "";
+let dreamTargetCache = [];
+let dreamDpr = 1;
 
 const weather = { loading:false, loaded:false, temperature:null, apparent:null, code:null, error:"" };
 const timerState = {
@@ -231,7 +234,7 @@ function weatherLabel(code){
 
 function createWeatherIcon(code){
   const f = weatherFamily(code);
-  const g = svgEl("g",{class:"weather-icon",transform:"translate(28 28)"});
+  const g = svgEl("g",{class:"weather-icon weather-"+f,transform:"translate(28 28)"});
   const line=(x1,y1,x2,y2,w=7)=>g.appendChild(svgEl("line",{x1,y1,x2,y2,stroke:"currentColor","stroke-width":w,"stroke-linecap":"round",class:"weather-stroke"}));
   const dot=(x,y,r=6)=>g.appendChild(svgEl("circle",{cx:x,cy:y,r,class:"weather-particle"}));
 
@@ -350,7 +353,6 @@ function modePayload(){
     const d=formatPair(currentCountdown(focusState));
     return {token:"focus:"+d.join(""),digits:d,separator:"time"};
   }
-  if(mode==="launcher") return {token:"launcher"};
   if(mode==="dream") return {token:"dream"};
   return {token:"weather:"+weather.temperature+":"+weather.code+":"+weather.loading+":"+weather.error};
 }
@@ -365,7 +367,8 @@ function updateMeta(){
     else if(weather.loaded) modeMeta.textContent=weatherLabel(weather.code)+(weather.apparent==null?"":" · FEELS "+Math.round(weather.apparent)+"°");
     else modeMeta.textContent="TAP · LOCATE";
   } else if(mode==="timer") modeMeta.textContent=timerState.running?"TIMER · RUNNING":"TIMER · "+Math.round(timerState.duration/60)+" MIN";
-  else modeMeta.textContent=focusState.running?"FOCUS · STAY HERE":"FOCUS · 25 MIN";
+  else if(mode==="focus") modeMeta.textContent=focusState.running?"FOCUS · STAY HERE":"FOCUS · 25 MIN";
+  else if(mode==="dream") modeMeta.textContent="GENERATIVE · "+(dreamMode===0?"TIME MORPH":"CONSTELLATION");
 }
 
 function animateEntrance(layer){
@@ -382,7 +385,7 @@ function mountMode(entrance=true){
   if(mode==="weather"){
     layer=createWeatherLayer();
     displayedDigits=[];
-  } else if(mode==="launcher" || mode==="dream"){
+  } else if(mode==="dream"){
     layer=svgEl("g",{class:"time-layer special-layer"});
     displayedDigits=[];
   } else {
@@ -397,7 +400,7 @@ function mountMode(entrance=true){
   updateMeta();
   updateActions();
   updateModeButtons();
-  if(entrance && mode!=="launcher" && mode!=="dream") animateEntrance(layer);
+  if(entrance && mode!=="dream") animateEntrance(layer);
 }
 
 function nearestCell(index,set){
@@ -473,7 +476,7 @@ function updateDigit(group,oldChar,newChar){
 
 function tickDisplay(){
   const p=modePayload();
-  if(mode==="launcher" || mode==="dream"){updateMeta();return;}
+  if(mode==="dream"){updateMeta();return;}
   if(p.token===displayToken){updateMeta();return;}
   if(mode==="weather"){mountMode(false);return;}
 
@@ -498,7 +501,7 @@ function transitionTo(axis,dir){
   const p=modePayload();
   let next;
   if(mode==="weather") next=createWeatherLayer();
-  else if(mode==="launcher" || mode==="dream") next=svgEl("g",{class:"time-layer special-layer"});
+  else if(mode==="dream") next=svgEl("g",{class:"time-layer special-layer"});
   else {
     next=createNumericLayer(p.digits,p.separator);
     if(mode==="focus") next.appendChild(createFocusRail(focusState.remaining,focusState.duration));
@@ -515,7 +518,7 @@ function transitionTo(axis,dir){
   const inMove=axis==="x"?"translateX("+(dir*28)+"px)":"translateY("+(dir*26)+"px)";
   const a=previous.animate([{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"},{opacity:0,transform:outMove+" scale(.98)",filter:"blur(4px)"}],{duration:260,fill:"forwards",easing:"ease"});
   const b=next.animate([{opacity:0,transform:inMove+" scale(.98)",filter:"blur(4px)"},{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"}],{duration:340,fill:"both",easing:"cubic-bezier(.16,1,.3,1)"});
-  if(mode!=="launcher" && mode!=="dream") animateEntrance(next);
+  if(mode!=="dream") animateEntrance(next);
   Promise.allSettled([a.finished,b.finished]).then(()=>{previous.remove();transitioning=false;});
 }
 
@@ -640,10 +643,9 @@ function launchItem(index){
 
 function updateAmbientWeather(){
   ambientWeather.replaceChildren();
-  app.dataset.weather=weather.loaded?weatherFamily(weather.code):"none";
-  if(!weather.loaded) return;
-  const family=weatherFamily(weather.code);
-  const count=family==="rain"?22:family==="snow"?18:family==="clear"?10:family==="storm"?14:8;
+  const family=weatherFamily(weather.code==null?3:weather.code);
+  app.dataset.weather=family;
+  const count=family==="rain"?28:family==="snow"?24:family==="clear"?14:family==="storm"?22:12;
   for(let i=0;i<count;i++){
     const p=document.createElement("i");
     p.style.setProperty("--i",String(i));
@@ -656,17 +658,19 @@ function updateAmbientWeather(){
 
 function setupDreamParticles(){
   const rect=dreamCanvas.getBoundingClientRect();
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  dreamCanvas.width=Math.max(1,Math.floor(rect.width*dpr));
-  dreamCanvas.height=Math.max(1,Math.floor(rect.height*dpr));
-  const count=Math.min(130,Math.max(72,Math.floor(rect.width/7)));
+  dreamDpr=Math.min(window.devicePixelRatio||1,2);
+  dreamCanvas.width=Math.max(1,Math.floor(rect.width*dreamDpr));
+  dreamCanvas.height=Math.max(1,Math.floor(rect.height*dreamDpr));
+  const count=Math.min(92,Math.max(64,Math.floor(rect.width/10)));
   if(dreamParticles.length!==count){
     dreamParticles=Array.from({length:count},(_,i)=>({
       x:Math.random()*rect.width,y:Math.random()*rect.height,
-      vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,
+      vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,
       seed:i*1.618
     }));
   }
+  dreamTargetKey="";
+  dreamTargetCache=[];
 }
 
 function dreamTargets(text,w,h,count){
@@ -691,70 +695,102 @@ function dreamTargets(text,w,h,count){
 }
 
 function drawDream(){
-  dreamFrame=requestAnimationFrame(drawDream);
-  if(mode!=="dream" || !dreamCanvas.isConnected) return;
+  if(mode!=="dream" || !dreamCanvas.isConnected){
+    dreamFrame=0;
+    return;
+  }
+
   const rect=dreamCanvas.getBoundingClientRect();
-  if(!rect.width || !rect.height) return;
-  if(!dreamCanvas.width || Math.abs(dreamCanvas.width/(window.devicePixelRatio||1)-rect.width)>2) setupDreamParticles();
+  if(!rect.width || !rect.height){
+    dreamFrame=requestAnimationFrame(drawDream);
+    return;
+  }
+
+  if(!dreamCanvas.width || Math.abs(dreamCanvas.width/dreamDpr-rect.width)>2) setupDreamParticles();
+
   const dpr=dreamCanvas.width/rect.width;
   const ctx=dreamCanvas.getContext("2d");
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,rect.width,rect.height);
+
   const fg=getComputedStyle(app).getPropertyValue("--fg").trim()||"#fff";
   ctx.fillStyle=fg;
   ctx.strokeStyle=fg;
-  dreamPhase+=.006;
+  ctx.lineWidth=.7;
+  dreamPhase+=.008;
 
-  let targets=[];
+  let targets=dreamTargetCache;
   if(dreamMode===0){
     const now=new Date();
-    const key=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    dreamLastTimeKey=key;
-    targets=dreamTargets(key,rect.width,rect.height,dreamParticles.length);
+    const timeKey=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+    const nextKey=timeKey+"|"+Math.round(rect.width)+"|"+Math.round(rect.height)+"|"+dreamParticles.length;
+    dreamLastTimeKey=timeKey;
+    if(nextKey!==dreamTargetKey){
+      dreamTargetKey=nextKey;
+      dreamTargetCache=dreamTargets(timeKey,rect.width,rect.height,dreamParticles.length);
+    }
+    targets=dreamTargetCache;
   }
 
   dreamParticles.forEach((p,i)=>{
     if(dreamMode===0 && targets[i]){
-      p.x+=(targets[i].x-p.x)*.026;
-      p.y+=(targets[i].y-p.y)*.026;
+      p.x+=(targets[i].x-p.x)*.045;
+      p.y+=(targets[i].y-p.y)*.045;
     }else{
-      p.vx+=Math.sin(dreamPhase*2+p.seed)*.002;
-      p.vy+=Math.cos(dreamPhase*1.7+p.seed)*.002;
-      p.vx*=.992;p.vy*=.992;
-      p.x+=p.vx;p.y+=p.vy;
-      if(p.x<0)p.x+=rect.width;if(p.x>rect.width)p.x-=rect.width;
-      if(p.y<0)p.y+=rect.height;if(p.y>rect.height)p.y-=rect.height;
+      p.vx+=Math.sin(dreamPhase*2+p.seed)*.0025;
+      p.vy+=Math.cos(dreamPhase*1.7+p.seed)*.0025;
+      p.vx*=.99;
+      p.vy*=.99;
+      p.x+=p.vx;
+      p.y+=p.vy;
+      if(p.x<0)p.x+=rect.width;
+      if(p.x>rect.width)p.x-=rect.width;
+      if(p.y<0)p.y+=rect.height;
+      if(p.y>rect.height)p.y-=rect.height;
     }
   });
 
-  ctx.globalAlpha=.28;
   for(let i=0;i<dreamParticles.length;i++){
     const a=dreamParticles[i];
     for(let j=i+1;j<dreamParticles.length;j++){
-      const b=dreamParticles[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
-      if(d<46){
-        ctx.globalAlpha=(1-d/46)*.16;
-        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      const b=dreamParticles[j];
+      const dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+      if(d<52){
+        ctx.globalAlpha=(1-d/52)*.18;
+        ctx.beginPath();
+        ctx.moveTo(a.x,a.y);
+        ctx.lineTo(b.x,b.y);
+        ctx.stroke();
       }
     }
   }
+
   dreamParticles.forEach((p,i)=>{
     const pulse=.65+.35*Math.sin(dreamPhase*5+p.seed);
-    ctx.globalAlpha=.28+.62*pulse;
-    ctx.beginPath();ctx.arc(p.x,p.y,1.4+(i%5===0?1.1:0),0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=.32+.68*pulse;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,1.7+(i%6===0?1.1:0),0,Math.PI*2);
+    ctx.fill();
   });
   ctx.globalAlpha=1;
+
+  dreamFrame=requestAnimationFrame(drawDream);
 }
 
 function updateSpecialMode(){
-  launcherGrid.classList.toggle("show",mode==="launcher");
+  launcherGrid.classList.remove("show");
   dreamCanvas.classList.toggle("show",mode==="dream");
-  clock.classList.toggle("hidden-for-special",mode==="launcher" || mode==="dream");
-  if(mode==="launcher") renderLauncher();
+  clock.classList.toggle("hidden-for-special",mode==="dream");
+
   if(mode==="dream"){
     setupDreamParticles();
-    if(!dreamFrame) drawDream();
+    if(!dreamFrame) dreamFrame=requestAnimationFrame(drawDream);
+  }else if(dreamFrame){
+    cancelAnimationFrame(dreamFrame);
+    dreamFrame=0;
   }
+
+  updateAmbientWeather();
 }
 
 function requestWeather(){
