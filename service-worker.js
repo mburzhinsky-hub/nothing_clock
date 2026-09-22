@@ -1,4 +1,4 @@
-const CACHE = "glyph-clock-v4";
+const CACHE = "glyph-clock-v5";
 const ASSETS = [
   "./",
   "./index.html",

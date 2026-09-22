@@ -1,6 +1,16 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
-const STYLES = ["dot", "segment", "hybrid"];
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const STYLES = ["dot", "segment", "hybrid", "wire", "stencil"];
+const STYLE_LABELS = {
+  dot: "Dot Matrix",
+  segment: "Segment",
+  hybrid: "Hybrid",
+  wire: "Wire",
+  stencil: "Stencil"
+};
+
+const reduceMotion = window.matchMedia
+  ? window.matchMedia("(prefers-reduced-motion: reduce)")
+  : { matches: false };
 
 const app = document.getElementById("app");
 const stage = document.getElementById("stage");
@@ -8,7 +18,7 @@ const clock = document.getElementById("clock");
 const controls = document.getElementById("controls");
 const themeToggle = document.getElementById("themeToggle");
 const toast = document.getElementById("toast");
-const styleButtons = [...document.querySelectorAll("[data-style-choice]")];
+const styleButtons = Array.from(document.querySelectorAll("[data-style-choice]"));
 
 const DOT_PATTERNS = {
   "0": ["01110","11011","11011","11011","11011","11011","01110"],
@@ -46,16 +56,41 @@ const SEGMENT_GEOMETRY = {
   g: [22, 90, 78, 14]
 };
 
+const WIRE_PATHS = {
+  "0": "M30 18 H82 Q102 18 102 40 V142 Q102 162 82 162 H30 Q10 162 10 142 V40 Q10 18 30 18 Z",
+  "1": "M28 48 L58 20 V162 M32 162 H88",
+  "2": "M18 44 Q18 18 44 18 H76 Q102 18 102 44 Q102 60 88 72 L24 126 Q10 138 10 162 H104",
+  "3": "M18 34 Q32 18 52 18 H76 Q100 18 100 42 Q100 62 80 72 Q104 80 104 104 V136 Q104 162 78 162 H46 Q24 162 10 146",
+  "4": "M86 18 V162 M86 100 H12 L66 18",
+  "5": "M102 18 H24 V78 H72 Q100 78 100 106 V136 Q100 162 74 162 H42 Q20 162 10 146",
+  "6": "M94 26 Q82 18 66 18 H40 Q14 18 14 44 V136 Q14 162 40 162 H72 Q98 162 98 136 V108 Q98 84 74 84 H14",
+  "7": "M12 20 H104 L54 162",
+  "8": "M38 18 H74 Q98 18 98 42 V56 Q98 74 80 82 Q102 90 102 112 V138 Q102 162 78 162 H34 Q10 162 10 138 V112 Q10 90 32 82 Q14 74 14 56 V42 Q14 18 38 18 Z",
+  "9": "M98 96 H38 Q14 96 14 72 V42 Q14 18 38 18 H72 Q98 18 98 44 V136 Q98 162 74 162 H46"
+};
+
 const DIGIT_X = [0, 170, 400, 570];
 const COLON_X = 342;
 const VIEWBOX = "0 0 710 250";
 
-let glyphStyle = STYLES.includes(localStorage.getItem("glyph-style"))
-  ? localStorage.getItem("glyph-style")
-  : "dot";
-let theme = ["dark", "light"].includes(localStorage.getItem("clock-theme"))
-  ? localStorage.getItem("clock-theme")
-  : "dark";
+function safeGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+function safeSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (_) {}
+}
+
+let storedStyle = safeGet("glyph-style");
+let storedTheme = safeGet("clock-theme");
+let glyphStyle = STYLES.indexOf(storedStyle) >= 0 ? storedStyle : "dot";
+let theme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
 
 let displayedDigits = [];
 let controlsTimer = null;
@@ -66,9 +101,16 @@ let transitioningStyle = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-function svgEl(name, attrs = {}) {
+function canAnimate(node) {
+  return !reduceMotion.matches && node && typeof node.animate === "function";
+}
+
+function svgEl(name, attrs) {
   const el = document.createElementNS(SVG_NS, name);
-  Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+  const values = attrs || {};
+  Object.keys(values).forEach(function (key) {
+    el.setAttribute(key, values[key]);
+  });
   return el;
 }
 
@@ -80,23 +122,23 @@ function nowDigits() {
 }
 
 function timeLabel(digits) {
-  return `${digits[0]}${digits[1]}:${digits[2]}${digits[3]}`;
+  return digits[0] + digits[1] + ":" + digits[2] + digits[3];
 }
 
 function patternSet(char) {
   const set = new Set();
-  DOT_PATTERNS[char].forEach((row, r) => {
-    [...row].forEach((cell, c) => {
+  DOT_PATTERNS[char].forEach(function (row, r) {
+    Array.from(row).forEach(function (cell, c) {
       if (cell === "1") set.add(r * 5 + c);
     });
   });
   return set;
 }
 
-function createDotDigit(char, x, hybrid = false) {
+function createDotDigit(char, x, hybrid) {
   const group = svgEl("g", {
     class: hybrid ? "digit digit-hybrid" : "digit digit-dot",
-    transform: `translate(${x} 27)`,
+    transform: "translate(" + x + " 27)",
     "data-char": char
   });
 
@@ -107,18 +149,19 @@ function createDotDigit(char, x, hybrid = false) {
     const c = i % 5;
     const cx = c * 27 + 14;
     const cy = r * 27 + 14;
-
     let node;
+
     if (!hybrid) {
       node = svgEl("circle", {
-        cx,
-        cy,
+        cx: cx,
+        cy: cy,
         r: 8.2,
         class: "glyph-pixel"
       });
     } else {
       const horizontalBand = r === 0 || r === 3 || r === 6;
       const capsule = (r + c) % 3 !== 1 || c === 0 || c === 4;
+
       if (capsule) {
         node = svgEl("rect", {
           x: cx - (horizontalBand ? 10.5 : 6),
@@ -130,8 +173,8 @@ function createDotDigit(char, x, hybrid = false) {
         });
       } else {
         node = svgEl("circle", {
-          cx,
-          cy,
+          cx: cx,
+          cy: cy,
           r: 6.2,
           class: "glyph-pixel hybrid-piece"
         });
@@ -150,23 +193,29 @@ function createDotDigit(char, x, hybrid = false) {
 function createSegmentDigit(char, x) {
   const group = svgEl("g", {
     class: "digit digit-segment",
-    transform: `translate(${x + 6} 27)`,
+    transform: "translate(" + (x + 6) + " 27)",
     "data-char": char
   });
 
   const active = new Set(SEGMENTS[char]);
 
-  Object.entries(SEGMENT_GEOMETRY).forEach(([name, [rx, ry, width, height]]) => {
+  Object.keys(SEGMENT_GEOMETRY).forEach(function (name) {
+    const geometry = SEGMENT_GEOMETRY[name];
+    const rx = geometry[0];
+    const ry = geometry[1];
+    const width = geometry[2];
+    const height = geometry[3];
     const node = svgEl("rect", {
       x: rx,
       y: ry,
-      width,
-      height,
+      width: width,
+      height: height,
       rx: Math.min(width, height) / 2,
       class: "segment-piece",
       "data-segment": name,
       "data-axis": width > height ? "x" : "y"
     });
+
     node.dataset.on = active.has(name) ? "1" : "0";
     node.style.opacity = active.has(name) ? "1" : "var(--segment-ghost)";
     group.appendChild(node);
@@ -175,10 +224,78 @@ function createSegmentDigit(char, x) {
   return group;
 }
 
+function stencilSegmentPath(x, y, width, height) {
+  const cut = Math.min(width, height) * 0.32;
+  return [
+    "M", x + cut, y,
+    "H", x + width - cut,
+    "L", x + width, y + cut,
+    "V", y + height - cut,
+    "L", x + width - cut, y + height,
+    "H", x + cut,
+    "L", x, y + height - cut,
+    "V", y + cut,
+    "Z"
+  ].join(" ");
+}
+
+function createStencilDigit(char, x) {
+  const group = svgEl("g", {
+    class: "digit digit-stencil",
+    transform: "translate(" + (x + 6) + " 27)",
+    "data-char": char
+  });
+
+  const active = new Set(SEGMENTS[char]);
+
+  Object.keys(SEGMENT_GEOMETRY).forEach(function (name) {
+    const geometry = SEGMENT_GEOMETRY[name];
+    const rx = geometry[0];
+    const ry = geometry[1];
+    const width = geometry[2];
+    const height = geometry[3];
+    const node = svgEl("path", {
+      d: stencilSegmentPath(rx, ry, width, height),
+      class: "stencil-piece",
+      "data-segment": name,
+      "data-axis": width > height ? "x" : "y"
+    });
+
+    node.dataset.on = active.has(name) ? "1" : "0";
+    node.style.opacity = active.has(name) ? "1" : "var(--segment-ghost)";
+    group.appendChild(node);
+  });
+
+  return group;
+}
+
+function createWireDigit(char, x) {
+  const group = svgEl("g", {
+    class: "digit digit-wire",
+    transform: "translate(" + (x + 5) + " 36)",
+    "data-char": char
+  });
+
+  const skeleton = svgEl("path", {
+    d: WIRE_PATHS[char],
+    class: "wire-skeleton"
+  });
+
+  const active = svgEl("path", {
+    d: WIRE_PATHS[char],
+    class: "wire-active"
+  });
+  active.dataset.on = "1";
+
+  group.appendChild(skeleton);
+  group.appendChild(active);
+  return group;
+}
+
 function createColon(style) {
   const group = svgEl("g", {
-    class: `colon colon-${style}`,
-    transform: `translate(${COLON_X} 27)`,
+    class: "colon colon-" + style,
+    transform: "translate(" + COLON_X + " 27)",
     "aria-hidden": "true"
   });
 
@@ -188,6 +305,12 @@ function createColon(style) {
   } else if (style === "hybrid") {
     group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 6 }));
     group.appendChild(svgEl("rect", { x: 1, y: 116, width: 12, height: 20, rx: 6 }));
+  } else if (style === "wire") {
+    group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 4 }));
+    group.appendChild(svgEl("circle", { cx: 7, cy: 127, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 4 }));
+  } else if (style === "stencil") {
+    group.appendChild(svgEl("path", { d: "M7 62 L16 71 L7 80 L-2 71 Z" }));
+    group.appendChild(svgEl("path", { d: "M7 118 L16 127 L7 136 L-2 127 Z" }));
   } else {
     group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 7.5 }));
     group.appendChild(svgEl("circle", { cx: 7, cy: 127, r: 7.5 }));
@@ -196,16 +319,22 @@ function createColon(style) {
   return group;
 }
 
+function createDigit(style, char, x) {
+  if (style === "segment") return createSegmentDigit(char, x);
+  if (style === "hybrid") return createDotDigit(char, x, true);
+  if (style === "wire") return createWireDigit(char, x);
+  if (style === "stencil") return createStencilDigit(char, x);
+  return createDotDigit(char, x, false);
+}
+
 function createLayer(style, digits) {
   const layer = svgEl("g", {
     class: "time-layer",
     "data-style": style
   });
 
-  digits.forEach((char, index) => {
-    const digit = style === "segment"
-      ? createSegmentDigit(char, DIGIT_X[index])
-      : createDotDigit(char, DIGIT_X[index], style === "hybrid");
+  digits.forEach(function (char, index) {
+    const digit = createDigit(style, char, DIGIT_X[index]);
     digit.dataset.index = String(index);
     layer.appendChild(digit);
   });
@@ -217,23 +346,22 @@ function createLayer(style, digits) {
 function animateEntrance(layer) {
   if (reduceMotion.matches) return;
 
-  const ghost = Number.parseFloat(
-    getComputedStyle(app).getPropertyValue("--glyph-ghost")
-  ) || .075;
+  const pieces = Array.from(
+    layer.querySelectorAll(".glyph-pixel, .segment-piece, .stencil-piece, .wire-active")
+  ).filter(function (piece) {
+    return piece.dataset.on === "1";
+  });
 
-  const pieces = [...layer.querySelectorAll(".glyph-pixel, .segment-piece")].filter(
-    (piece) => piece.dataset.on === "1"
-  );
-
-  pieces.forEach((piece, index) => {
+  pieces.forEach(function (piece, index) {
+    if (!canAnimate(piece)) return;
     piece.animate(
       [
-        { opacity: ghost, transform: "scale(.94)" },
+        { opacity: 0.16, transform: "scale(.95)" },
         { opacity: 1, transform: "scale(1)" }
       ],
       {
-        duration: 260,
-        delay: Math.min(index * 5, 90),
+        duration: 250,
+        delay: Math.min(index * 4, 80),
         easing: "cubic-bezier(.16,1,.3,1)",
         fill: "both"
       }
@@ -250,104 +378,126 @@ function mountInitialLayer() {
   animateEntrance(currentLayer);
 }
 
-function animateDotCell(piece, fromOn, toOn, index, hybrid = false) {
-  const delay = ((index % 5) * 7) + (Math.floor(index / 5) * 3);
-  const ghost = Number.parseFloat(
-    getComputedStyle(app).getPropertyValue("--glyph-ghost")
-  ) || .075;
-  const currentOpacity = fromOn ? 1 : ghost;
-  const nextOpacity = toOn ? 1 : ghost;
+function animateDotCell(piece, fromOn, toOn, index) {
+  const ghost = parseFloat(getComputedStyle(app).getPropertyValue("--glyph-ghost")) || 0.07;
+  const fromOpacity = fromOn ? 1 : ghost;
+  const toOpacity = toOn ? 1 : ghost;
 
-  if (reduceMotion.matches) {
-    piece.style.opacity = String(nextOpacity);
+  if (fromOn === toOn || !canAnimate(piece)) {
+    piece.style.opacity = String(toOpacity);
     piece.dataset.on = toOn ? "1" : "0";
     return;
   }
 
-  if (fromOn === toOn) {
-    piece.style.opacity = String(nextOpacity);
-    piece.dataset.on = toOn ? "1" : "0";
-    return;
-  }
+  const animation = piece.animate(
+    [
+      { opacity: fromOpacity, transform: fromOn ? "scale(1)" : "scale(.92)" },
+      { opacity: toOpacity, transform: toOn ? "scale(1)" : "scale(.94)" }
+    ],
+    {
+      duration: 280,
+      delay: (index % 5) * 6 + Math.floor(index / 5) * 3,
+      easing: "cubic-bezier(.16,1,.3,1)",
+      fill: "both"
+    }
+  );
 
-  const frames = toOn
-    ? [
-        { opacity: currentOpacity, transform: "scale(.93)" },
-        { opacity: 1, transform: "scale(1)" }
-      ]
-    : [
-        { opacity: 1, transform: "scale(1)" },
-        { opacity: nextOpacity, transform: hybrid ? "scale(.92)" : "scale(.95)" }
-      ];
-
-  const animation = piece.animate(frames, {
-    duration: 280,
-    delay,
-    easing: "cubic-bezier(.16,1,.3,1)",
-    fill: "both"
-  });
-
-  animation.finished.catch(() => {}).then(() => {
-    piece.style.opacity = String(nextOpacity);
+  animation.finished.catch(function () {}).then(function () {
+    piece.style.opacity = String(toOpacity);
     piece.style.transform = "";
     piece.dataset.on = toOn ? "1" : "0";
   });
 }
 
 function animateSegmentPiece(piece, fromOn, toOn, index) {
-  const ghost = Number.parseFloat(
-    getComputedStyle(app).getPropertyValue("--segment-ghost")
-  ) || .055;
-
+  const ghost = parseFloat(getComputedStyle(app).getPropertyValue("--segment-ghost")) || 0.065;
   const fromOpacity = fromOn ? 1 : ghost;
   const toOpacity = toOn ? 1 : ghost;
 
-  if (reduceMotion.matches) {
-    piece.style.opacity = String(toOpacity);
-    piece.dataset.on = toOn ? "1" : "0";
-    return;
-  }
-
-  if (fromOn === toOn) {
+  if (fromOn === toOn || !canAnimate(piece)) {
     piece.style.opacity = String(toOpacity);
     piece.dataset.on = toOn ? "1" : "0";
     return;
   }
 
   const axis = piece.dataset.axis;
-  const compressed = axis === "x" ? "scaleX(.9)" : "scaleY(.9)";
-  const frames = toOn
-    ? [
-        { opacity: fromOpacity, transform: compressed },
-        { opacity: 1, transform: "scale(1)" }
-      ]
-    : [
-        { opacity: 1, transform: "scale(1)" },
-        { opacity: toOpacity, transform: compressed }
-      ];
+  const quietScale = axis === "x" ? "scaleX(.92)" : "scaleY(.92)";
+  const animation = piece.animate(
+    [
+      { opacity: fromOpacity, transform: fromOn ? "scale(1)" : quietScale },
+      { opacity: toOpacity, transform: toOn ? "scale(1)" : quietScale }
+    ],
+    {
+      duration: 260,
+      delay: index * 8,
+      easing: "cubic-bezier(.16,1,.3,1)",
+      fill: "both"
+    }
+  );
 
-  const animation = piece.animate(frames, {
-    duration: 260,
-    delay: index * 10,
-    easing: "cubic-bezier(.16,1,.3,1)",
-    fill: "both"
-  });
-
-  animation.finished.catch(() => {}).then(() => {
+  animation.finished.catch(function () {}).then(function () {
     piece.style.opacity = String(toOpacity);
     piece.style.transform = "";
     piece.dataset.on = toOn ? "1" : "0";
   });
 }
 
+function replaceDigitGroup(oldGroup, nextGroup) {
+  oldGroup.after(nextGroup);
+
+  if (!canAnimate(oldGroup) || !canAnimate(nextGroup)) {
+    oldGroup.remove();
+    return;
+  }
+
+  const outAnimation = oldGroup.animate(
+    [
+      { opacity: 1, transform: "translateY(0) scale(1)" },
+      { opacity: 0, transform: "translateY(-4px) scale(.985)" }
+    ],
+    {
+      duration: 210,
+      easing: "cubic-bezier(.4,0,.2,1)",
+      fill: "forwards"
+    }
+  );
+
+  const inAnimation = nextGroup.animate(
+    [
+      { opacity: 0, transform: "translateY(4px) scale(.985)" },
+      { opacity: 1, transform: "translateY(0) scale(1)" }
+    ],
+    {
+      duration: 260,
+      easing: "cubic-bezier(.16,1,.3,1)",
+      fill: "both"
+    }
+  );
+
+  Promise.allSettled([outAnimation.finished, inAnimation.finished]).then(function () {
+    oldGroup.remove();
+  });
+}
+
 function updateDigit(group, oldChar, newChar, style) {
   if (oldChar === newChar) return;
+
+  if (style === "wire") {
+    const index = Number(group.dataset.index);
+    const nextGroup = createWireDigit(newChar, DIGIT_X[index]);
+    nextGroup.dataset.index = String(index);
+    replaceDigitGroup(group, nextGroup);
+    return;
+  }
+
   group.dataset.char = newChar;
 
-  if (style === "segment") {
+  if (style === "segment" || style === "stencil") {
     const oldActive = new Set(SEGMENTS[oldChar]);
     const newActive = new Set(SEGMENTS[newChar]);
-    [...group.querySelectorAll(".segment-piece")].forEach((piece, index) => {
+    const selector = style === "stencil" ? ".stencil-piece" : ".segment-piece";
+
+    Array.from(group.querySelectorAll(selector)).forEach(function (piece, index) {
       const name = piece.dataset.segment;
       animateSegmentPiece(piece, oldActive.has(name), newActive.has(name), index);
     });
@@ -356,14 +506,9 @@ function updateDigit(group, oldChar, newChar, style) {
 
   const oldActive = patternSet(oldChar);
   const newActive = patternSet(newChar);
-  [...group.querySelectorAll(".glyph-pixel")].forEach((piece, index) => {
-    animateDotCell(
-      piece,
-      oldActive.has(index),
-      newActive.has(index),
-      index,
-      style === "hybrid"
-    );
+
+  Array.from(group.querySelectorAll(".glyph-pixel")).forEach(function (piece, index) {
+    animateDotCell(piece, oldActive.has(index), newActive.has(index), index);
   });
 }
 
@@ -377,57 +522,47 @@ function updateTime() {
 
   if (nextDigits.join("") === displayedDigits.join("")) return;
 
-  const groups = [...currentLayer.querySelectorAll(".digit")];
-  nextDigits.forEach((char, index) => {
+  const groups = Array.from(currentLayer.querySelectorAll(".digit"));
+  nextDigits.forEach(function (char, index) {
     updateDigit(groups[index], displayedDigits[index], char, glyphStyle);
   });
 
   displayedDigits = nextDigits;
   clock.setAttribute("aria-label", timeLabel(displayedDigits));
-
-  if (!reduceMotion.matches) {
-    clock.animate(
-      [
-        { filter: "drop-shadow(0 0 0 currentColor)" },
-        { filter: "drop-shadow(0 0 5px color-mix(in srgb, currentColor 22%, transparent))", offset: .45 },
-        { filter: "drop-shadow(0 0 0 currentColor)" }
-      ],
-      { duration: 420, easing: "ease-out" }
-    );
-  }
 }
 
-async function switchGlyphStyle(nextStyle, swipeDirection = null) {
-  if (!STYLES.includes(nextStyle) || nextStyle === glyphStyle || transitioningStyle) return;
+async function switchGlyphStyle(nextStyle, swipeDirection) {
+  if (STYLES.indexOf(nextStyle) < 0 || nextStyle === glyphStyle || transitioningStyle) return;
 
   transitioningStyle = true;
-  const previousStyle = glyphStyle;
   const previousLayer = currentLayer;
-  const oldIndex = STYLES.indexOf(previousStyle);
+  const oldIndex = STYLES.indexOf(glyphStyle);
   const newIndex = STYLES.indexOf(nextStyle);
-  const direction = swipeDirection ?? (newIndex > oldIndex ? 1 : -1);
+  const direction = typeof swipeDirection === "number"
+    ? swipeDirection
+    : (newIndex > oldIndex ? 1 : -1);
 
   glyphStyle = nextStyle;
-  localStorage.setItem("glyph-style", glyphStyle);
+  safeSet("glyph-style", glyphStyle);
   updateStyleButtons();
 
   const nextLayer = createLayer(glyphStyle, displayedDigits);
   clock.appendChild(nextLayer);
   currentLayer = nextLayer;
 
-  if (reduceMotion.matches) {
-    previousLayer?.remove();
+  if (!canAnimate(previousLayer) || !canAnimate(nextLayer)) {
+    if (previousLayer) previousLayer.remove();
     transitioningStyle = false;
     return;
   }
 
   const outAnimation = previousLayer.animate(
     [
-      { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" },
-      { opacity: 0, transform: `translateX(${direction * -28}px) scale(.975)`, filter: "blur(8px)" }
+      { opacity: 1, transform: "translateX(0) scale(1)" },
+      { opacity: 0, transform: "translateX(" + (direction * -18) + "px) scale(.99)" }
     ],
     {
-      duration: 360,
+      duration: 240,
       easing: "cubic-bezier(.4,0,.2,1)",
       fill: "forwards"
     }
@@ -435,58 +570,58 @@ async function switchGlyphStyle(nextStyle, swipeDirection = null) {
 
   const inAnimation = nextLayer.animate(
     [
-      { opacity: 0, transform: `translateX(${direction * 34}px) scale(.975)`, filter: "blur(10px)" },
-      { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" }
+      { opacity: 0, transform: "translateX(" + (direction * 20) + "px) scale(.99)" },
+      { opacity: 1, transform: "translateX(0) scale(1)" }
     ],
     {
-      duration: 460,
+      duration: 300,
       easing: "cubic-bezier(.16,1,.3,1)",
       fill: "both"
     }
   );
 
-  animateEntrance(nextLayer);
-
-  await Promise.allSettled([outAnimation.finished, inAnimation.finished]);
-  previousLayer?.remove();
-  transitioningStyle = false;
+  Promise.allSettled([outAnimation.finished, inAnimation.finished]).then(function () {
+    if (previousLayer) previousLayer.remove();
+    transitioningStyle = false;
+  });
 }
 
 function updateStyleButtons() {
   app.dataset.style = glyphStyle;
-  styleButtons.forEach((button) => {
+  styleButtons.forEach(function (button) {
     const active = button.dataset.styleChoice === glyphStyle;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   });
 }
 
-function applyTheme(animate = true) {
+function applyTheme(animate) {
   app.classList.toggle("theme-dark", theme === "dark");
   app.classList.toggle("theme-light", theme === "light");
 
-  document.querySelector('meta[name="theme-color"]').setAttribute(
-    "content",
-    theme === "dark" ? "#050505" : "#f3f3ef"
-  );
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", theme === "dark" ? "#050505" : "#f3f3ef");
+  }
 
-  if (animate && !reduceMotion.matches) {
+  if (animate && canAnimate(clock)) {
     clock.animate(
       [
         { transform: "scale(1)" },
-        { transform: "scale(.986)", offset: .42 },
+        { transform: "scale(.99)" },
         { transform: "scale(1)" }
       ],
-      { duration: 360, easing: "cubic-bezier(.16,1,.3,1)" }
+      { duration: 280, easing: "cubic-bezier(.16,1,.3,1)" }
     );
   }
 }
 
-function showControls(autoHide = true) {
+function showControls(autoHide) {
   app.classList.add("controls-visible");
   clearTimeout(controlsTimer);
-  if (autoHide) {
-    controlsTimer = setTimeout(() => {
+
+  if (autoHide !== false) {
+    controlsTimer = setTimeout(function () {
       app.classList.remove("controls-visible");
     }, 4200);
   }
@@ -501,7 +636,9 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("show"), 1100);
+  toastTimer = setTimeout(function () {
+    toast.classList.remove("show");
+  }, 1000);
 }
 
 async function requestWakeLock() {
@@ -511,38 +648,40 @@ async function requestWakeLock() {
   } catch (_) {}
 }
 
-stage.addEventListener("click", () => {
+stage.addEventListener("click", function () {
   if (app.classList.contains("controls-visible")) {
     hideControls();
   } else {
-    showControls();
+    showControls(true);
   }
   requestWakeLock();
 });
 
-controls.addEventListener("click", (event) => event.stopPropagation());
+controls.addEventListener("click", function (event) {
+  event.stopPropagation();
+});
 
-styleButtons.forEach((button) => {
-  button.addEventListener("click", () => {
+styleButtons.forEach(function (button) {
+  button.addEventListener("click", function () {
     switchGlyphStyle(button.dataset.styleChoice);
-    showControls();
+    showControls(true);
   });
 });
 
-themeToggle.addEventListener("click", () => {
+themeToggle.addEventListener("click", function () {
   theme = theme === "dark" ? "light" : "dark";
-  localStorage.setItem("clock-theme", theme);
+  safeSet("clock-theme", theme);
   applyTheme(true);
-  showControls();
+  showControls(true);
 });
 
-stage.addEventListener("touchstart", (event) => {
+stage.addEventListener("touchstart", function (event) {
   const touch = event.changedTouches[0];
   touchStartX = touch.clientX;
   touchStartY = touch.clientY;
 }, { passive: true });
 
-stage.addEventListener("touchend", (event) => {
+stage.addEventListener("touchend", function (event) {
   const touch = event.changedTouches[0];
   const dx = touch.clientX - touchStartX;
   const dy = touch.clientY - touchStartY;
@@ -554,11 +693,11 @@ stage.addEventListener("touchend", (event) => {
   const nextStyle = STYLES[(index + direction + STYLES.length) % STYLES.length];
 
   switchGlyphStyle(nextStyle, direction);
-  showToast(nextStyle === "dot" ? "Dot Matrix" : nextStyle === "segment" ? "Segment" : "Hybrid");
+  showToast(STYLE_LABELS[nextStyle]);
   requestWakeLock();
 }, { passive: true });
 
-document.addEventListener("visibilitychange", () => {
+document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") {
     requestWakeLock();
     updateTime();
@@ -566,8 +705,8 @@ document.addEventListener("visibilitychange", () => {
 });
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./service-worker.js").catch(function () {});
   });
 }
 
