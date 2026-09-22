@@ -140,7 +140,7 @@ function createDotDigit(char, x, hybrid = false) {
 
     node.dataset.cell = String(i);
     node.dataset.on = active.has(i) ? "1" : "0";
-    node.style.opacity = active.has(i) ? "1" : "0";
+    node.style.opacity = active.has(i) ? "1" : "var(--glyph-ghost)";
     group.appendChild(node);
   }
 
@@ -217,6 +217,10 @@ function createLayer(style, digits) {
 function animateEntrance(layer) {
   if (reduceMotion.matches) return;
 
+  const ghost = Number.parseFloat(
+    getComputedStyle(app).getPropertyValue("--glyph-ghost")
+  ) || .075;
+
   const pieces = [...layer.querySelectorAll(".glyph-pixel, .segment-piece")].filter(
     (piece) => piece.dataset.on === "1"
   );
@@ -224,12 +228,12 @@ function animateEntrance(layer) {
   pieces.forEach((piece, index) => {
     piece.animate(
       [
-        { opacity: 0, transform: "translateY(7px) scale(.35)", filter: "blur(3px)" },
-        { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0)" }
+        { opacity: ghost, transform: "scale(.94)" },
+        { opacity: 1, transform: "scale(1)" }
       ],
       {
-        duration: 340,
-        delay: Math.min(index * 7, 140),
+        duration: 260,
+        delay: Math.min(index * 5, 90),
         easing: "cubic-bezier(.16,1,.3,1)",
         fill: "both"
       }
@@ -247,9 +251,12 @@ function mountInitialLayer() {
 }
 
 function animateDotCell(piece, fromOn, toOn, index, hybrid = false) {
-  const delay = ((index % 5) * 12) + (Math.floor(index / 5) * 5);
-  const currentOpacity = fromOn ? 1 : 0;
-  const nextOpacity = toOn ? 1 : 0;
+  const delay = ((index % 5) * 7) + (Math.floor(index / 5) * 3);
+  const ghost = Number.parseFloat(
+    getComputedStyle(app).getPropertyValue("--glyph-ghost")
+  ) || .075;
+  const currentOpacity = fromOn ? 1 : ghost;
+  const nextOpacity = toOn ? 1 : ghost;
 
   if (reduceMotion.matches) {
     piece.style.opacity = String(nextOpacity);
@@ -257,31 +264,24 @@ function animateDotCell(piece, fromOn, toOn, index, hybrid = false) {
     return;
   }
 
-  let frames;
-  if (!fromOn && toOn) {
-    frames = [
-      { opacity: 0, transform: hybrid ? "translateY(8px) scale(.2) rotate(4deg)" : "translateY(8px) scale(.2)", filter: "blur(3px)" },
-      { opacity: 1, transform: "translateY(0) scale(1) rotate(0deg)", filter: "blur(0)" }
-    ];
-  } else if (fromOn && !toOn) {
-    frames = [
-      { opacity: currentOpacity, transform: "translateY(0) scale(1)", filter: "blur(0)" },
-      { opacity: 0, transform: hybrid ? "translateY(-7px) scale(.3) rotate(-4deg)" : "translateY(-7px) scale(.3)", filter: "blur(3px)" }
-    ];
-  } else if (fromOn && toOn) {
-    frames = [
-      { opacity: 1, transform: "scale(1)" },
-      { opacity: .68, transform: "scale(.82)", offset: .42 },
-      { opacity: 1, transform: "scale(1)" }
-    ];
-  } else {
-    piece.style.opacity = "0";
-    piece.dataset.on = "0";
+  if (fromOn === toOn) {
+    piece.style.opacity = String(nextOpacity);
+    piece.dataset.on = toOn ? "1" : "0";
     return;
   }
 
+  const frames = toOn
+    ? [
+        { opacity: currentOpacity, transform: "scale(.93)" },
+        { opacity: 1, transform: "scale(1)" }
+      ]
+    : [
+        { opacity: 1, transform: "scale(1)" },
+        { opacity: nextOpacity, transform: hybrid ? "scale(.92)" : "scale(.95)" }
+      ];
+
   const animation = piece.animate(frames, {
-    duration: fromOn && toOn ? 240 : 320,
+    duration: 280,
     delay,
     easing: "cubic-bezier(.16,1,.3,1)",
     fill: "both"
@@ -290,7 +290,6 @@ function animateDotCell(piece, fromOn, toOn, index, hybrid = false) {
   animation.finished.catch(() => {}).then(() => {
     piece.style.opacity = String(nextOpacity);
     piece.style.transform = "";
-    piece.style.filter = "";
     piece.dataset.on = toOn ? "1" : "0";
   });
 }
@@ -310,34 +309,26 @@ function animateSegmentPiece(piece, fromOn, toOn, index) {
   }
 
   if (fromOn === toOn) {
-    if (toOn) {
-      piece.animate(
-        [
-          { opacity: 1, filter: "blur(0)" },
-          { opacity: .78, filter: "blur(.8px)", offset: .45 },
-          { opacity: 1, filter: "blur(0)" }
-        ],
-        { duration: 230, delay: index * 9, easing: "ease-out" }
-      );
-    }
+    piece.style.opacity = String(toOpacity);
+    piece.dataset.on = toOn ? "1" : "0";
     return;
   }
 
   const axis = piece.dataset.axis;
-  const compressed = axis === "x" ? "scaleX(.48)" : "scaleY(.48)";
+  const compressed = axis === "x" ? "scaleX(.9)" : "scaleY(.9)";
   const frames = toOn
     ? [
-        { opacity: fromOpacity, transform: compressed, filter: "blur(4px)" },
-        { opacity: 1, transform: "scale(1)", filter: "blur(0)" }
+        { opacity: fromOpacity, transform: compressed },
+        { opacity: 1, transform: "scale(1)" }
       ]
     : [
-        { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
-        { opacity: toOpacity, transform: compressed, filter: "blur(3px)" }
+        { opacity: 1, transform: "scale(1)" },
+        { opacity: toOpacity, transform: compressed }
       ];
 
   const animation = piece.animate(frames, {
-    duration: 300,
-    delay: index * 18,
+    duration: 260,
+    delay: index * 10,
     easing: "cubic-bezier(.16,1,.3,1)",
     fill: "both"
   });
@@ -345,7 +336,6 @@ function animateSegmentPiece(piece, fromOn, toOn, index) {
   animation.finished.catch(() => {}).then(() => {
     piece.style.opacity = String(toOpacity);
     piece.style.transform = "";
-    piece.style.filter = "";
     piece.dataset.on = toOn ? "1" : "0";
   });
 }
