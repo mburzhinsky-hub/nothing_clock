@@ -77,6 +77,7 @@ let displayToken = "";
 let touchStartX = 0, touchStartY = 0;
 let transitioning = false;
 let controlsTimer = null, toastTimer = null, wakeLock = null;
+let actionToken = "";
 
 const weather = { loading:false, loaded:false, temperature:null, apparent:null, code:null, error:"" };
 const timerState = {
@@ -473,6 +474,15 @@ function actionButton(label,action,primary=false){
 }
 
 function updateActions(){
+  const nextToken =
+    mode === "weather" ? "weather:" + weather.loading :
+    mode === "timer" ? "timer:" + timerState.running :
+    mode === "focus" ? "focus:" + focusState.running :
+    mode;
+
+  if (nextToken === actionToken) return;
+  actionToken = nextToken;
+
   modeActions.replaceChildren();
   if(mode==="weather") modeActions.appendChild(actionButton(weather.loading?"…":"LOCATE","weather",true));
   else if(mode==="timer"){
