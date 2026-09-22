@@ -1,9 +1,9 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const STYLES = ["dot", "segment", "hybrid", "wire", "stencil"];
-const MODES = ["clock", "date", "weather", "timer", "focus"];
+const MODES = ["clock", "date", "weather", "timer", "focus", "launcher", "dream"];
 const STYLE_LABELS = { dot:"Dot Matrix", segment:"Segment", hybrid:"Hybrid", wire:"Wire", stencil:"Stencil" };
-const MODE_LABELS = { clock:"CLOCK", date:"DATE", weather:"WEATHER", timer:"TIMER", focus:"FOCUS" };
+const MODE_LABELS = { clock:"CLOCK", date:"DATE", weather:"WEATHER", timer:"TIMER", focus:"FOCUS", launcher:"LAUNCHER", dream:"DREAM" };
 
 const app = document.getElementById("app");
 const stage = document.getElementById("stage");
@@ -11,6 +11,14 @@ const clock = document.getElementById("clock");
 const controls = document.getElementById("controls");
 const modeActions = document.getElementById("modeActions");
 const modeMeta = document.getElementById("modeMeta");
+const ambientWeather = document.getElementById("ambientWeather");
+const dreamCanvas = document.getElementById("dreamCanvas");
+const launcherGrid = document.getElementById("launcherGrid");
+const launcherEditor = document.getElementById("launcherEditor");
+const launcherLabel = document.getElementById("launcherLabel");
+const launcherUrl = document.getElementById("launcherUrl");
+const launcherSave = document.getElementById("launcherSave");
+const launcherCancel = document.getElementById("launcherCancel");
 const themeToggle = document.getElementById("themeToggle");
 const toast = document.getElementById("toast");
 const styleButtons = Array.from(document.querySelectorAll("[data-style-choice]"));
@@ -78,6 +86,13 @@ let touchStartX = 0, touchStartY = 0;
 let transitioning = false;
 let controlsTimer = null, toastTimer = null, wakeLock = null;
 let actionToken = "";
+let launcherEditIndex = -1;
+let launcherHoldTimer = null;
+let dreamPhase = 0;
+let dreamMode = 0;
+let dreamFrame = 0;
+let dreamParticles = [];
+let dreamLastTimeKey = "";
 
 const weather = { loading:false, loaded:false, temperature:null, apparent:null, code:null, error:"" };
 const timerState = {
@@ -86,6 +101,29 @@ const timerState = {
   running:false, endAt:0
 };
 const focusState = { duration:1500, remaining:1500, running:false, endAt:0 };
+
+const DEFAULT_LAUNCHER = [
+  { label:"MUSIC", url:"music://" },
+  { label:"MAPS", url:"maps://" },
+  { label:"YOUTUBE", url:"https://youtube.com/" },
+  { label:"TELEGRAM", url:"tg://" },
+  { label:"NOTES", url:"mobilenotes://" },
+  { label:"SHORTCUT", url:"shortcuts://" }
+];
+
+function loadLauncher(){
+  try{
+    const raw=getStore("launcher-items");
+    const parsed=raw?JSON.parse(raw):null;
+    if(Array.isArray(parsed) && parsed.length===6) return parsed.map((item,i)=>({
+      label:String(item.label||DEFAULT_LAUNCHER[i].label).slice(0,16),
+      url:String(item.url||DEFAULT_LAUNCHER[i].url).slice(0,240)
+    }));
+  }catch(_){}
+  return DEFAULT_LAUNCHER.map(item=>({...item}));
+}
+
+let launcherItems = loadLauncher();
 
 function patternSet(char){
   const set = new Set();
@@ -312,6 +350,8 @@ function modePayload(){
     const d=formatPair(currentCountdown(focusState));
     return {token:"focus:"+d.join(""),digits:d,separator:"time"};
   }
+  if(mode==="launcher") return {token:"launcher"};
+  if(mode==="dream") return {token:"dream"};
   return {token:"weather:"+weather.temperature+":"+weather.code+":"+weather.loading+":"+weather.error};
 }
 
@@ -342,6 +382,9 @@ function mountMode(entrance=true){
   if(mode==="weather"){
     layer=createWeatherLayer();
     displayedDigits=[];
+  } else if(mode==="launcher" || mode==="dream"){
+    layer=svgEl("g",{class:"time-layer special-layer"});
+    displayedDigits=[];
   } else {
     layer=createNumericLayer(p.digits,p.separator);
     displayedDigits=p.digits.slice();
@@ -350,16 +393,45 @@ function mountMode(entrance=true){
   currentLayer=layer;
   displayToken=p.token;
   clock.replaceChildren(layer);
+  updateSpecialMode();
   updateMeta();
   updateActions();
   updateModeButtons();
-  if(entrance) animateEntrance(layer);
+  if(entrance && mode!=="launcher" && mode!=="dream") animateEntrance(layer);
 }
 
-function animateDot(piece,fromOn,toOn,index){
+function nearestCell(index,set){
+  if(!set || set.size===0) return index;
+  const r=Math.floor(index/5), c=index%5;
+  let best=index, bestD=Infinity;
+  set.forEach(candidate=>{
+    const rr=Math.floor(candidate/5), cc=candidate%5;
+    const d=Math.abs(rr-r)+Math.abs(cc-c);
+    if(d<bestD){bestD=d;best=candidate;}
+  });
+  return best;
+}
+
+function animateDot(piece,fromOn,toOn,index,oldSet,newSet){
   if(fromOn===toOn) return;
   const ghost=parseFloat(getComputedStyle(app).getPropertyValue("--glyph-ghost"))||.07;
-  const a=piece.animate([{opacity:fromOn?1:ghost,transform:fromOn?"scale(1)":"scale(.9)"},{opacity:toOn?1:ghost,transform:toOn?"scale(1)":"scale(.94)"}],{duration:300,delay:(index%5)*7+Math.floor(index/5)*3,easing:"cubic-bezier(.16,1,.3,1)",fill:"both"});
+  let dx=0,dy=0;
+  if(toOn && !fromOn){
+    const source=nearestCell(index,oldSet);
+    dx=((source%5)-(index%5))*27;
+    dy=(Math.floor(source/5)-Math.floor(index/5))*27;
+  }else if(fromOn && !toOn){
+    const target=nearestCell(index,newSet);
+    dx=((target%5)-(index%5))*27;
+    dy=(Math.floor(target/5)-Math.floor(index/5))*27;
+  }
+  const fromTransform=toOn&&!fromOn?"translate("+dx+"px,"+dy+"px) scale(.55)":"translate(0,0) scale(1)";
+  const toTransform=fromOn&&!toOn?"translate("+dx+"px,"+dy+"px) scale(.45)":"translate(0,0) scale(1)";
+  const a=piece.animate([
+    {opacity:fromOn?1:ghost,transform:fromTransform},
+    {offset:.58,opacity:.9,transform:"translate("+(dx*.25)+"px,"+(dy*.25)+"px) scale(1.08)"},
+    {opacity:toOn?1:ghost,transform:toTransform}
+  ],{duration:430,delay:(index%5)*6,easing:"cubic-bezier(.16,1,.3,1)",fill:"both"});
   a.finished.catch(()=>{}).then(()=>{piece.style.opacity=String(toOn?1:ghost);piece.style.transform="";piece.dataset.on=toOn?"1":"0";});
 }
 
@@ -395,12 +467,13 @@ function updateDigit(group,oldChar,newChar){
     Array.from(group.querySelectorAll(selector)).forEach((piece,i)=>animateSegment(piece,oldSet.has(piece.dataset.segment),newSet.has(piece.dataset.segment),i));
   } else {
     const oldSet=patternSet(oldChar), newSet=patternSet(newChar);
-    Array.from(group.querySelectorAll(".glyph-pixel")).forEach((piece,i)=>animateDot(piece,oldSet.has(i),newSet.has(i),i));
+    Array.from(group.querySelectorAll(".glyph-pixel")).forEach((piece,i)=>animateDot(piece,oldSet.has(i),newSet.has(i),i,oldSet,newSet));
   }
 }
 
 function tickDisplay(){
   const p=modePayload();
+  if(mode==="launcher" || mode==="dream"){updateMeta();return;}
   if(p.token===displayToken){updateMeta();return;}
   if(mode==="weather"){mountMode(false);return;}
 
@@ -425,6 +498,7 @@ function transitionTo(axis,dir){
   const p=modePayload();
   let next;
   if(mode==="weather") next=createWeatherLayer();
+  else if(mode==="launcher" || mode==="dream") next=svgEl("g",{class:"time-layer special-layer"});
   else {
     next=createNumericLayer(p.digits,p.separator);
     if(mode==="focus") next.appendChild(createFocusRail(focusState.remaining,focusState.duration));
@@ -433,6 +507,7 @@ function transitionTo(axis,dir){
   displayedDigits=p.digits?p.digits.slice():[];
   displayToken=p.token;
   clock.appendChild(next);
+  updateSpecialMode();
   updateMeta(); updateActions(); updateModeButtons();
 
   if(!canAnimate(previous) || !canAnimate(next)){ if(previous) previous.remove(); transitioning=false; return; }
@@ -440,7 +515,7 @@ function transitionTo(axis,dir){
   const inMove=axis==="x"?"translateX("+(dir*28)+"px)":"translateY("+(dir*26)+"px)";
   const a=previous.animate([{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"},{opacity:0,transform:outMove+" scale(.98)",filter:"blur(4px)"}],{duration:260,fill:"forwards",easing:"ease"});
   const b=next.animate([{opacity:0,transform:inMove+" scale(.98)",filter:"blur(4px)"},{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"}],{duration:340,fill:"both",easing:"cubic-bezier(.16,1,.3,1)"});
-  animateEntrance(next);
+  if(mode!=="launcher" && mode!=="dream") animateEntrance(next);
   Promise.allSettled([a.finished,b.finished]).then(()=>{previous.remove();transitioning=false;});
 }
 
@@ -478,6 +553,7 @@ function updateActions(){
     mode === "weather" ? "weather:" + weather.loading :
     mode === "timer" ? "timer:" + timerState.running :
     mode === "focus" ? "focus:" + focusState.running :
+    mode === "dream" ? "dream:" + dreamMode :
     mode;
 
   if (nextToken === actionToken) return;
@@ -489,6 +565,8 @@ function updateActions(){
     modeActions.append(actionButton("−","timer-minus"),actionButton(timerState.running?"PAUSE":"START","timer-toggle",true),actionButton("RESET","timer-reset"),actionButton("+","timer-plus"));
   } else if(mode==="focus"){
     modeActions.append(actionButton(focusState.running?"PAUSE":"FOCUS","focus-toggle",true),actionButton("RESET","focus-reset"));
+  } else if(mode==="dream"){
+    modeActions.append(actionButton("MORPH","dream-morph",dreamMode===0),actionButton("FIELD","dream-field",dreamMode===1));
   }
   modeActions.classList.toggle("has-actions",modeActions.children.length>0);
 }
@@ -511,6 +589,174 @@ function finishPulse(){
   clock.animate([{opacity:1,transform:"scale(1)"},{opacity:.4,transform:"scale(.97)"},{opacity:1,transform:"scale(1.015)"},{opacity:1,transform:"scale(1)"}],{duration:850,easing:"cubic-bezier(.16,1,.3,1)"});
 }
 
+function renderLauncher(){
+  launcherGrid.replaceChildren();
+  launcherItems.forEach((item,index)=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="launcher-item";
+    button.dataset.index=String(index);
+    button.innerHTML='<span class="launcher-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="launcher-name"></span>';
+    button.querySelector(".launcher-name").textContent=item.label;
+    launcherGrid.appendChild(button);
+  });
+}
+
+function openLauncherEditor(index){
+  launcherEditIndex=index;
+  const item=launcherItems[index];
+  launcherLabel.value=item.label;
+  launcherUrl.value=item.url;
+  launcherEditor.hidden=false;
+  requestAnimationFrame(()=>launcherLabel.focus());
+}
+
+function closeLauncherEditor(){
+  launcherEditor.hidden=true;
+  launcherEditIndex=-1;
+}
+
+function saveLauncher(){
+  if(launcherEditIndex<0) return;
+  const label=launcherLabel.value.trim().slice(0,16)||"APP";
+  const url=launcherUrl.value.trim().slice(0,240);
+  if(!url){showToast("URL REQUIRED");return;}
+  launcherItems[launcherEditIndex]={label,url};
+  setStore("launcher-items",JSON.stringify(launcherItems));
+  renderLauncher();
+  closeLauncherEditor();
+  showToast("SAVED");
+}
+
+function launchItem(index){
+  const item=launcherItems[index];
+  if(!item || !item.url) return;
+  try{
+    window.location.href=item.url;
+  }catch(_){
+    showToast("CAN'T OPEN");
+  }
+}
+
+function updateAmbientWeather(){
+  ambientWeather.replaceChildren();
+  app.dataset.weather=weather.loaded?weatherFamily(weather.code):"none";
+  if(!weather.loaded) return;
+  const family=weatherFamily(weather.code);
+  const count=family==="rain"?22:family==="snow"?18:family==="clear"?10:family==="storm"?14:8;
+  for(let i=0;i<count;i++){
+    const p=document.createElement("i");
+    p.style.setProperty("--i",String(i));
+    p.style.setProperty("--x",((i*37)%97)+"%");
+    p.style.setProperty("--d",(3.6+(i%7)*.43)+"s");
+    p.style.setProperty("--delay",(-((i*13)%31)/10)+"s");
+    ambientWeather.appendChild(p);
+  }
+}
+
+function setupDreamParticles(){
+  const rect=dreamCanvas.getBoundingClientRect();
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  dreamCanvas.width=Math.max(1,Math.floor(rect.width*dpr));
+  dreamCanvas.height=Math.max(1,Math.floor(rect.height*dpr));
+  const count=Math.min(130,Math.max(72,Math.floor(rect.width/7)));
+  if(dreamParticles.length!==count){
+    dreamParticles=Array.from({length:count},(_,i)=>({
+      x:Math.random()*rect.width,y:Math.random()*rect.height,
+      vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,
+      seed:i*1.618
+    }));
+  }
+}
+
+function dreamTargets(text,w,h,count){
+  const temp=document.createElement("canvas");
+  temp.width=700;temp.height=250;
+  const ctx=temp.getContext("2d");
+  ctx.clearRect(0,0,700,250);
+  ctx.fillStyle="#fff";
+  ctx.font="800 170px ui-monospace, Menlo, monospace";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText(text,350,128);
+  const data=ctx.getImageData(0,0,700,250).data;
+  const pts=[];
+  for(let y=12;y<238;y+=8){
+    for(let x=12;x<688;x+=8){
+      if(data[(y*700+x)*4+3]>120) pts.push({x:x/700*w,y:y/250*h});
+    }
+  }
+  if(!pts.length) return [];
+  return Array.from({length:count},(_,i)=>pts[(i*17)%pts.length]);
+}
+
+function drawDream(){
+  dreamFrame=requestAnimationFrame(drawDream);
+  if(mode!=="dream" || !dreamCanvas.isConnected) return;
+  const rect=dreamCanvas.getBoundingClientRect();
+  if(!rect.width || !rect.height) return;
+  if(!dreamCanvas.width || Math.abs(dreamCanvas.width/(window.devicePixelRatio||1)-rect.width)>2) setupDreamParticles();
+  const dpr=dreamCanvas.width/rect.width;
+  const ctx=dreamCanvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+  const fg=getComputedStyle(app).getPropertyValue("--fg").trim()||"#fff";
+  ctx.fillStyle=fg;
+  ctx.strokeStyle=fg;
+  dreamPhase+=.006;
+
+  let targets=[];
+  if(dreamMode===0){
+    const now=new Date();
+    const key=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+    dreamLastTimeKey=key;
+    targets=dreamTargets(key,rect.width,rect.height,dreamParticles.length);
+  }
+
+  dreamParticles.forEach((p,i)=>{
+    if(dreamMode===0 && targets[i]){
+      p.x+=(targets[i].x-p.x)*.026;
+      p.y+=(targets[i].y-p.y)*.026;
+    }else{
+      p.vx+=Math.sin(dreamPhase*2+p.seed)*.002;
+      p.vy+=Math.cos(dreamPhase*1.7+p.seed)*.002;
+      p.vx*=.992;p.vy*=.992;
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x+=rect.width;if(p.x>rect.width)p.x-=rect.width;
+      if(p.y<0)p.y+=rect.height;if(p.y>rect.height)p.y-=rect.height;
+    }
+  });
+
+  ctx.globalAlpha=.28;
+  for(let i=0;i<dreamParticles.length;i++){
+    const a=dreamParticles[i];
+    for(let j=i+1;j<dreamParticles.length;j++){
+      const b=dreamParticles[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+      if(d<46){
+        ctx.globalAlpha=(1-d/46)*.16;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      }
+    }
+  }
+  dreamParticles.forEach((p,i)=>{
+    const pulse=.65+.35*Math.sin(dreamPhase*5+p.seed);
+    ctx.globalAlpha=.28+.62*pulse;
+    ctx.beginPath();ctx.arc(p.x,p.y,1.4+(i%5===0?1.1:0),0,Math.PI*2);ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+function updateSpecialMode(){
+  launcherGrid.classList.toggle("show",mode==="launcher");
+  dreamCanvas.classList.toggle("show",mode==="dream");
+  clock.classList.toggle("hidden-for-special",mode==="launcher" || mode==="dream");
+  if(mode==="launcher") renderLauncher();
+  if(mode==="dream"){
+    setupDreamParticles();
+    if(!dreamFrame) drawDream();
+  }
+}
+
 function requestWeather(){
   if(weather.loading) return;
   weather.loading=true; weather.error=""; displayToken=""; tickDisplay();
@@ -524,10 +770,11 @@ function requestWeather(){
         weather.temperature=data.current?data.current.temperature_2m:null;
         weather.apparent=data.current?data.current.apparent_temperature:null;
         weather.code=data.current?data.current.weather_code:null;
+        updateAmbientWeather();
         displayToken="";tickDisplay();
       }).catch(()=>{weather.loading=false;weather.error="WEATHER OFFLINE";displayToken="";tickDisplay();});
     },
-    ()=>{weather.loading=false;weather.error="LOCATION OFF";displayToken="";tickDisplay();},
+    ()=>{weather.loading=false;weather.error="LOCATION OFF";updateAmbientWeather();displayToken="";tickDisplay();},
     {enableHighAccuracy:false,timeout:9000,maximumAge:600000}
   );
 }
@@ -562,11 +809,29 @@ modeActions.addEventListener("click",e=>{
   if(a==="timer-reset") resetCountdown(timerState);
   if(a==="focus-toggle") toggleCountdown(focusState);
   if(a==="focus-reset") resetCountdown(focusState);
+  if(a==="dream-morph"){dreamMode=0;actionToken="";updateActions();updateMeta();}
+  if(a==="dream-field"){dreamMode=1;actionToken="";updateActions();updateMeta();}
   showControls();
 });
 styleButtons.forEach(b=>b.addEventListener("click",()=>{switchStyle(b.dataset.styleChoice);showControls();}));
 modeButtons.forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();switchMode(b.dataset.modeChoice);showToast(MODE_LABELS[b.dataset.modeChoice]);}));
 themeToggle.addEventListener("click",()=>{theme=theme==="dark"?"light":"dark";setStore("clock-theme",theme);applyTheme(true);showControls();});
+
+launcherGrid.addEventListener("pointerdown",e=>{
+  const button=e.target.closest(".launcher-item"); if(!button) return;
+  clearTimeout(launcherHoldTimer);
+  launcherHoldTimer=setTimeout(()=>{openLauncherEditor(Number(button.dataset.index));launcherHoldTimer=null;},620);
+});
+launcherGrid.addEventListener("pointerup",e=>{
+  const button=e.target.closest(".launcher-item"); if(!button) return;
+  if(launcherHoldTimer){clearTimeout(launcherHoldTimer);launcherHoldTimer=null;launchItem(Number(button.dataset.index));}
+});
+launcherGrid.addEventListener("pointercancel",()=>{clearTimeout(launcherHoldTimer);launcherHoldTimer=null;});
+launcherGrid.addEventListener("contextmenu",e=>{const b=e.target.closest(".launcher-item");if(b){e.preventDefault();openLauncherEditor(Number(b.dataset.index));}});
+launcherSave.addEventListener("click",saveLauncher);
+launcherCancel.addEventListener("click",closeLauncherEditor);
+launcherEditor.addEventListener("click",e=>{if(e.target===launcherEditor) closeLauncherEditor();});
+window.addEventListener("resize",()=>{if(mode==="dream")setupDreamParticles();});
 
 stage.addEventListener("touchstart",e=>{const t=e.changedTouches[0];touchStartX=t.clientX;touchStartY=t.clientY;},{passive:true});
 stage.addEventListener("touchend",e=>{
@@ -589,5 +854,6 @@ app.dataset.mode=mode;
 updateStyleButtons();
 updateModeButtons();
 applyTheme(false);
+updateAmbientWeather();
 mountMode(true);
 setInterval(tickDisplay,500);
