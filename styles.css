@@ -101,36 +101,50 @@ button {
 }
 
 .digit {
-  animation: glyph-idle 6.8s ease-in-out infinite;
+  animation: glyph-idle 5.8s ease-in-out infinite;
 }
 
-.digit[data-index="0"] { animation-delay: -1.1s; }
-.digit[data-index="1"] { animation-delay: -2.7s; }
-.digit[data-index="2"] { animation-delay: -4.2s; }
-.digit[data-index="3"] { animation-delay: -5.6s; }
+.digit[data-index="0"] { animation-delay: -0.4s; }
+.digit[data-index="1"] { animation-delay: -1.8s; }
+.digit[data-index="2"] { animation-delay: -3.1s; }
+.digit[data-index="3"] { animation-delay: -4.5s; }
+
+.glyph-pixel[data-on="1"],
+.segment-piece[data-on="1"],
+.stencil-piece[data-on="1"] {
+  animation: active-signal 3.4s ease-in-out infinite;
+}
 
 .glyph-pixel[data-on="0"],
 .segment-piece[data-on="0"],
 .stencil-piece[data-on="0"] {
-  animation: ghost-signal 4.6s ease-in-out infinite;
+  animation: ghost-signal 3.9s ease-in-out infinite;
 }
 
-.glyph-pixel[data-on="0"]:nth-child(5n + 1),
-.segment-piece[data-on="0"]:nth-child(3n + 1),
-.stencil-piece[data-on="0"]:nth-child(3n + 1) {
-  animation-delay: -1.2s;
+.glyph-pixel:nth-child(5n + 1),
+.segment-piece:nth-child(3n + 1),
+.stencil-piece:nth-child(3n + 1) {
+  animation-delay: -0.6s;
 }
 
-.glyph-pixel[data-on="0"]:nth-child(5n + 2),
-.segment-piece[data-on="0"]:nth-child(3n + 2),
-.stencil-piece[data-on="0"]:nth-child(3n + 2) {
-  animation-delay: -2.4s;
+.glyph-pixel:nth-child(5n + 2),
+.segment-piece:nth-child(3n + 2),
+.stencil-piece:nth-child(3n + 2) {
+  animation-delay: -1.45s;
 }
 
-.glyph-pixel[data-on="0"]:nth-child(5n + 3),
-.segment-piece[data-on="0"]:nth-child(3n),
-.stencil-piece[data-on="0"]:nth-child(3n) {
-  animation-delay: -3.5s;
+.glyph-pixel:nth-child(5n + 3),
+.segment-piece:nth-child(3n),
+.stencil-piece:nth-child(3n) {
+  animation-delay: -2.3s;
+}
+
+.glyph-pixel:nth-child(5n + 4) {
+  animation-delay: -3.05s;
+}
+
+.glyph-pixel:nth-child(5n) {
+  animation-delay: -3.65s;
 }
 
 .glyph-pixel,
@@ -208,28 +222,50 @@ button {
 @keyframes glyph-idle {
   0%,
   100% {
-    opacity: .9;
-    filter: brightness(.94);
+    opacity: .94;
+    filter: brightness(.96);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.04);
+  }
+}
+
+@keyframes active-signal {
+  0%,
+  100% {
+    opacity: .76;
+    transform: scale(.93);
+    filter: brightness(.92);
   }
   46% {
     opacity: 1;
-    filter: brightness(1.07);
+    transform: scale(1.045);
+    filter: brightness(1.12);
   }
-  72% {
-    opacity: .95;
-    filter: brightness(1);
+  66% {
+    opacity: .92;
+    transform: scale(.99);
+    filter: brightness(1.02);
   }
 }
 
 @keyframes ghost-signal {
   0%,
   100% {
-    filter: brightness(.65);
-    transform: scale(.92);
+    opacity: .035;
+    transform: scale(.86);
+    filter: brightness(.75);
   }
-  50% {
-    filter: brightness(1.75);
-    transform: scale(1);
+  48% {
+    opacity: .14;
+    transform: scale(1.08);
+    filter: brightness(1.4);
+  }
+  68% {
+    opacity: .07;
+    transform: scale(.96);
+    filter: brightness(1);
   }
 }
 
@@ -248,12 +284,16 @@ button {
 @keyframes wire-live {
   0%,
   100% {
-    opacity: .88;
-    stroke-width: 8.2;
+    opacity: .72;
+    stroke-width: 7.6;
   }
-  50% {
+  45% {
     opacity: 1;
-    stroke-width: 9.2;
+    stroke-width: 10.2;
+  }
+  68% {
+    opacity: .9;
+    stroke-width: 8.8;
   }
 }
 
@@ -460,11 +500,19 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition-duration: .001ms !important;
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
+  .clock {
+    animation-duration: 14s;
+  }
+
+  .digit {
+    animation-duration: 8s;
+  }
+
+  .glyph-pixel,
+  .segment-piece,
+  .stencil-piece,
+  .wire-skeleton,
+  .wire-active {
+    animation-duration: 6s;
   }
 }

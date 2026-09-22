@@ -102,7 +102,7 @@ let touchStartX = 0;
 let touchStartY = 0;
 
 function canAnimate(node) {
-  return !reduceMotion.matches && node && typeof node.animate === "function";
+  return node && typeof node.animate === "function";
 }
 
 function svgEl(name, attrs) {
@@ -344,8 +344,6 @@ function createLayer(style, digits) {
 }
 
 function animateEntrance(layer) {
-  if (reduceMotion.matches) return;
-
   const pieces = Array.from(
     layer.querySelectorAll(".glyph-pixel, .segment-piece, .stencil-piece, .wire-active")
   ).filter(function (piece) {
