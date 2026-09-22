@@ -14,43 +14,37 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main id="app" class="app theme-dark" data-style="dot" aria-label="Часы">
+  <main id="app" class="app theme-dark" data-style="dot" data-mode="clock" aria-label="Glyph ambient display">
     <button id="stage" class="stage" type="button" aria-label="Показать настройки">
-      <svg id="clock" class="clock" viewBox="0 0 710 250" role="img" aria-label="Текущее время"></svg>
+      <span class="display-shell">
+        <svg id="clock" class="clock" viewBox="0 0 710 250" role="img" aria-label="Текущее отображение"></svg>
+        <span id="modeMeta" class="mode-meta" aria-live="polite"></span>
+      </span>
     </button>
 
-    <section id="controls" class="controls" aria-label="Настройки часов">
-      <div class="style-switcher" role="group" aria-label="Стиль глифов">
-        <button class="chip active" data-style-choice="dot" type="button" aria-pressed="true">
-          <span class="chip-icon dot-icon" aria-hidden="true">•••</span>
-          <span>Dots</span>
-        </button>
-        <button class="chip" data-style-choice="segment" type="button" aria-pressed="false">
-          <span class="chip-icon segment-icon" aria-hidden="true">88</span>
-          <span>Segment</span>
-        </button>
-        <button class="chip" data-style-choice="hybrid" type="button" aria-pressed="false">
-          <span class="chip-icon hybrid-icon" aria-hidden="true">◌◍</span>
-          <span>Hybrid</span>
-        </button>
-        <button class="chip" data-style-choice="wire" type="button" aria-pressed="false">
-          <span class="chip-icon wire-icon" aria-hidden="true">⌁</span>
-          <span>Wire</span>
-        </button>
-        <button class="chip" data-style-choice="stencil" type="button" aria-pressed="false">
-          <span class="chip-icon stencil-icon" aria-hidden="true">▣</span>
-          <span>Stencil</span>
-        </button>
-      </div>
+    <nav id="modeRail" class="mode-rail" aria-label="Режим">
+      <button type="button" data-mode-choice="clock" aria-label="Clock"></button>
+      <button type="button" data-mode-choice="date" aria-label="Date"></button>
+      <button type="button" data-mode-choice="weather" aria-label="Weather"></button>
+      <button type="button" data-mode-choice="timer" aria-label="Timer"></button>
+      <button type="button" data-mode-choice="focus" aria-label="Focus"></button>
+    </nav>
 
-      <button id="themeToggle" class="theme-toggle" type="button" aria-label="Сменить тему">
-        <span class="theme-dot" aria-hidden="true"></span>
-      </button>
+    <section id="modeActions" class="mode-actions" aria-label="Управление режимом"></section>
+
+    <section id="controls" class="controls" aria-label="Настройки отображения">
+      <div class="style-switcher" role="group" aria-label="Стиль глифов">
+        <button class="chip active" data-style-choice="dot" type="button" aria-pressed="true"><span class="chip-icon dot-icon" aria-hidden="true">•••</span><span>Dots</span></button>
+        <button class="chip" data-style-choice="segment" type="button" aria-pressed="false"><span class="chip-icon segment-icon" aria-hidden="true">88</span><span>Segment</span></button>
+        <button class="chip" data-style-choice="hybrid" type="button" aria-pressed="false"><span class="chip-icon hybrid-icon" aria-hidden="true">◌◍</span><span>Hybrid</span></button>
+        <button class="chip" data-style-choice="wire" type="button" aria-pressed="false"><span class="chip-icon wire-icon" aria-hidden="true">⌁</span><span>Wire</span></button>
+        <button class="chip" data-style-choice="stencil" type="button" aria-pressed="false"><span class="chip-icon stencil-icon" aria-hidden="true">▣</span><span>Stencil</span></button>
+      </div>
+      <button id="themeToggle" class="theme-toggle" type="button" aria-label="Сменить тему"><span class="theme-dot" aria-hidden="true"></span></button>
     </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
-
   <script src="./app.js" defer></script>
 </body>
 </html>
