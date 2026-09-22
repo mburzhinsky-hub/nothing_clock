@@ -1,715 +1,583 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
-const STYLES = ["dot", "segment", "hybrid", "wire", "stencil"];
-const STYLE_LABELS = {
-  dot: "Dot Matrix",
-  segment: "Segment",
-  hybrid: "Hybrid",
-  wire: "Wire",
-  stencil: "Stencil"
-};
 
-const reduceMotion = window.matchMedia
-  ? window.matchMedia("(prefers-reduced-motion: reduce)")
-  : { matches: false };
+const STYLES = ["dot", "segment", "hybrid", "wire", "stencil"];
+const MODES = ["clock", "date", "weather", "timer", "focus"];
+const STYLE_LABELS = { dot:"Dot Matrix", segment:"Segment", hybrid:"Hybrid", wire:"Wire", stencil:"Stencil" };
+const MODE_LABELS = { clock:"CLOCK", date:"DATE", weather:"WEATHER", timer:"TIMER", focus:"FOCUS" };
 
 const app = document.getElementById("app");
 const stage = document.getElementById("stage");
 const clock = document.getElementById("clock");
 const controls = document.getElementById("controls");
+const modeActions = document.getElementById("modeActions");
+const modeMeta = document.getElementById("modeMeta");
 const themeToggle = document.getElementById("themeToggle");
 const toast = document.getElementById("toast");
 const styleButtons = Array.from(document.querySelectorAll("[data-style-choice]"));
+const modeButtons = Array.from(document.querySelectorAll("[data-mode-choice]"));
 
 const DOT_PATTERNS = {
-  "0": ["01110","11011","11011","11011","11011","11011","01110"],
-  "1": ["00110","01110","00110","00110","00110","00110","01110"],
-  "2": ["01110","11011","00011","00110","01100","11000","11111"],
-  "3": ["11110","00011","00011","01110","00011","00011","11110"],
-  "4": ["10011","10011","10011","11111","00011","00011","00011"],
-  "5": ["11111","11000","11000","11110","00011","00011","11110"],
-  "6": ["01110","11000","11000","11110","11011","11011","01110"],
-  "7": ["11111","00011","00110","00110","01100","01100","01100"],
-  "8": ["01110","11011","11011","01110","11011","11011","01110"],
-  "9": ["01110","11011","11011","01111","00011","00011","01110"]
+  "0":["01110","11011","11011","11011","11011","11011","01110"],
+  "1":["00110","01110","00110","00110","00110","00110","01110"],
+  "2":["01110","11011","00011","00110","01100","11000","11111"],
+  "3":["11110","00011","00011","01110","00011","00011","11110"],
+  "4":["10011","10011","10011","11111","00011","00011","00011"],
+  "5":["11111","11000","11000","11110","00011","00011","11110"],
+  "6":["01110","11000","11000","11110","11011","11011","01110"],
+  "7":["11111","00011","00110","00110","01100","01100","01100"],
+  "8":["01110","11011","11011","01110","11011","11011","01110"],
+  "9":["01110","11011","11011","01111","00011","00011","01110"]
 };
 
 const SEGMENTS = {
-  "0": ["a","b","c","d","e","f"],
-  "1": ["b","c"],
-  "2": ["a","b","g","e","d"],
-  "3": ["a","b","g","c","d"],
-  "4": ["f","g","b","c"],
-  "5": ["a","f","g","c","d"],
-  "6": ["a","f","g","e","c","d"],
-  "7": ["a","b","c"],
-  "8": ["a","b","c","d","e","f","g"],
-  "9": ["a","b","c","d","f","g"]
+  "0":["a","b","c","d","e","f"], "1":["b","c"], "2":["a","b","g","e","d"],
+  "3":["a","b","g","c","d"], "4":["f","g","b","c"], "5":["a","f","g","c","d"],
+  "6":["a","f","g","e","c","d"], "7":["a","b","c"],
+  "8":["a","b","c","d","e","f","g"], "9":["a","b","c","d","f","g"]
 };
 
 const SEGMENT_GEOMETRY = {
-  a: [22, 0, 78, 14],
-  b: [94, 14, 14, 76],
-  c: [94, 104, 14, 76],
-  d: [22, 180, 78, 14],
-  e: [8, 104, 14, 76],
-  f: [8, 14, 14, 76],
-  g: [22, 90, 78, 14]
+  a:[22,0,78,14], b:[94,14,14,76], c:[94,104,14,76], d:[22,180,78,14],
+  e:[8,104,14,76], f:[8,14,14,76], g:[22,90,78,14]
 };
 
 const WIRE_PATHS = {
-  "0": "M30 18 H82 Q102 18 102 40 V142 Q102 162 82 162 H30 Q10 162 10 142 V40 Q10 18 30 18 Z",
-  "1": "M28 48 L58 20 V162 M32 162 H88",
-  "2": "M18 44 Q18 18 44 18 H76 Q102 18 102 44 Q102 60 88 72 L24 126 Q10 138 10 162 H104",
-  "3": "M18 34 Q32 18 52 18 H76 Q100 18 100 42 Q100 62 80 72 Q104 80 104 104 V136 Q104 162 78 162 H46 Q24 162 10 146",
-  "4": "M86 18 V162 M86 100 H12 L66 18",
-  "5": "M102 18 H24 V78 H72 Q100 78 100 106 V136 Q100 162 74 162 H42 Q20 162 10 146",
-  "6": "M94 26 Q82 18 66 18 H40 Q14 18 14 44 V136 Q14 162 40 162 H72 Q98 162 98 136 V108 Q98 84 74 84 H14",
-  "7": "M12 20 H104 L54 162",
-  "8": "M38 18 H74 Q98 18 98 42 V56 Q98 74 80 82 Q102 90 102 112 V138 Q102 162 78 162 H34 Q10 162 10 138 V112 Q10 90 32 82 Q14 74 14 56 V42 Q14 18 38 18 Z",
-  "9": "M98 96 H38 Q14 96 14 72 V42 Q14 18 38 18 H72 Q98 18 98 44 V136 Q98 162 74 162 H46"
+  "0":"M30 18 H82 Q102 18 102 40 V142 Q102 162 82 162 H30 Q10 162 10 142 V40 Q10 18 30 18 Z",
+  "1":"M28 48 L58 20 V162 M32 162 H88",
+  "2":"M18 44 Q18 18 44 18 H76 Q102 18 102 44 Q102 60 88 72 L24 126 Q10 138 10 162 H104",
+  "3":"M18 34 Q32 18 52 18 H76 Q100 18 100 42 Q100 62 80 72 Q104 80 104 104 V136 Q104 162 78 162 H46 Q24 162 10 146",
+  "4":"M86 18 V162 M86 100 H12 L66 18",
+  "5":"M102 18 H24 V78 H72 Q100 78 100 106 V136 Q100 162 74 162 H42 Q20 162 10 146",
+  "6":"M94 26 Q82 18 66 18 H40 Q14 18 14 44 V136 Q14 162 40 162 H72 Q98 162 98 136 V108 Q98 84 74 84 H14",
+  "7":"M12 20 H104 L54 162",
+  "8":"M38 18 H74 Q98 18 98 42 V56 Q98 74 80 82 Q102 90 102 112 V138 Q102 162 78 162 H34 Q10 162 10 138 V112 Q10 90 32 82 Q14 74 14 56 V42 Q14 18 38 18 Z",
+  "9":"M98 96 H38 Q14 96 14 72 V42 Q14 18 38 18 H72 Q98 18 98 44 V136 Q98 162 74 162 H46"
 };
 
-const DIGIT_X = [0, 170, 400, 570];
-const COLON_X = 342;
-const VIEWBOX = "0 0 710 250";
+const X = [0,170,400,570];
+const SEP_X = 342;
+const WEEKDAYS = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-function safeGet(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch (_) {
-    return null;
-  }
-}
-
-function safeSet(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch (_) {}
-}
-
-let storedStyle = safeGet("glyph-style");
-let storedTheme = safeGet("clock-theme");
-let glyphStyle = STYLES.indexOf(storedStyle) >= 0 ? storedStyle : "dot";
-let theme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
-
-let displayedDigits = [];
-let controlsTimer = null;
-let toastTimer = null;
-let wakeLock = null;
-let currentLayer = null;
-let transitioningStyle = false;
-let touchStartX = 0;
-let touchStartY = 0;
-
-function canAnimate(node) {
-  return node && typeof node.animate === "function";
-}
-
-function svgEl(name, attrs) {
+function getStore(key){ try { return localStorage.getItem(key); } catch (_) { return null; } }
+function setStore(key,val){ try { localStorage.setItem(key,val); } catch (_) {} }
+function canAnimate(el){ return el && typeof el.animate === "function"; }
+function svgEl(name, attrs){
   const el = document.createElementNS(SVG_NS, name);
-  const values = attrs || {};
-  Object.keys(values).forEach(function (key) {
-    el.setAttribute(key, values[key]);
-  });
+  Object.entries(attrs || {}).forEach(([k,v]) => el.setAttribute(k,v));
   return el;
 }
 
-function nowDigits() {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return [hours[0], hours[1], minutes[0], minutes[1]];
-}
+let glyphStyle = STYLES.includes(getStore("glyph-style")) ? getStore("glyph-style") : "dot";
+let theme = getStore("clock-theme") === "light" ? "light" : "dark";
+let mode = MODES.includes(getStore("display-mode")) ? getStore("display-mode") : "clock";
+let currentLayer = null;
+let displayedDigits = [];
+let displayToken = "";
+let touchStartX = 0, touchStartY = 0;
+let transitioning = false;
+let controlsTimer = null, toastTimer = null, wakeLock = null;
 
-function timeLabel(digits) {
-  return digits[0] + digits[1] + ":" + digits[2] + digits[3];
-}
+const weather = { loading:false, loaded:false, temperature:null, apparent:null, code:null, error:"" };
+const timerState = {
+  duration: Number(getStore("timer-duration")) || 300,
+  remaining: Number(getStore("timer-duration")) || 300,
+  running:false, endAt:0
+};
+const focusState = { duration:1500, remaining:1500, running:false, endAt:0 };
 
-function patternSet(char) {
+function patternSet(char){
   const set = new Set();
-  DOT_PATTERNS[char].forEach(function (row, r) {
-    Array.from(row).forEach(function (cell, c) {
-      if (cell === "1") set.add(r * 5 + c);
-    });
-  });
+  DOT_PATTERNS[char].forEach((row,r) => [...row].forEach((cell,c) => { if(cell==="1") set.add(r*5+c); }));
   return set;
 }
 
-function createDotDigit(char, x, hybrid) {
-  const group = svgEl("g", {
-    class: hybrid ? "digit digit-hybrid" : "digit digit-dot",
-    transform: "translate(" + x + " 27)",
-    "data-char": char
-  });
-
+function createDotDigit(char, x, hybrid){
+  const g = svgEl("g",{class:hybrid?"digit digit-hybrid":"digit digit-dot",transform:"translate("+x+" 27)","data-char":char});
   const active = patternSet(char);
-
-  for (let i = 0; i < 35; i += 1) {
-    const r = Math.floor(i / 5);
-    const c = i % 5;
-    const cx = c * 27 + 14;
-    const cy = r * 27 + 14;
-    let node;
-
-    if (!hybrid) {
-      node = svgEl("circle", {
-        cx: cx,
-        cy: cy,
-        r: 8.2,
-        class: "glyph-pixel"
-      });
+  for(let i=0;i<35;i++){
+    const r=Math.floor(i/5), c=i%5, cx=c*27+14, cy=r*27+14;
+    let n;
+    if(!hybrid){
+      n = svgEl("circle",{cx,cy,r:8.2,class:"glyph-pixel"});
     } else {
-      const horizontalBand = r === 0 || r === 3 || r === 6;
-      const capsule = (r + c) % 3 !== 1 || c === 0 || c === 4;
-
-      if (capsule) {
-        node = svgEl("rect", {
-          x: cx - (horizontalBand ? 10.5 : 6),
-          y: cy - (horizontalBand ? 5 : 10),
-          width: horizontalBand ? 21 : 12,
-          height: horizontalBand ? 10 : 20,
-          rx: 6,
-          class: "glyph-pixel hybrid-piece"
-        });
-      } else {
-        node = svgEl("circle", {
-          cx: cx,
-          cy: cy,
-          r: 6.2,
-          class: "glyph-pixel hybrid-piece"
-        });
-      }
+      const horizontal = r===0 || r===3 || r===6;
+      const capsule = (r+c)%3!==1 || c===0 || c===4;
+      n = capsule
+        ? svgEl("rect",{x:cx-(horizontal?10.5:6),y:cy-(horizontal?5:10),width:horizontal?21:12,height:horizontal?10:20,rx:6,class:"glyph-pixel hybrid-piece"})
+        : svgEl("circle",{cx,cy,r:6.2,class:"glyph-pixel hybrid-piece"});
     }
-
-    node.dataset.cell = String(i);
-    node.dataset.on = active.has(i) ? "1" : "0";
-    node.style.opacity = active.has(i) ? "1" : "var(--glyph-ghost)";
-    group.appendChild(node);
+    n.dataset.on = active.has(i) ? "1" : "0";
+    n.dataset.cell = String(i);
+    n.style.opacity = active.has(i) ? "1" : "var(--glyph-ghost)";
+    g.appendChild(n);
   }
-
-  return group;
+  return g;
 }
 
-function createSegmentDigit(char, x) {
-  const group = svgEl("g", {
-    class: "digit digit-segment",
-    transform: "translate(" + (x + 6) + " 27)",
-    "data-char": char
-  });
+function stencilPath(x,y,w,h){
+  const cut = Math.min(w,h)*.32;
+  return ["M",x+cut,y,"H",x+w-cut,"L",x+w,y+cut,"V",y+h-cut,"L",x+w-cut,y+h,"H",x+cut,"L",x,y+h-cut,"V",y+cut,"Z"].join(" ");
+}
 
+function createSegmentDigit(char, x, stencil){
+  const g = svgEl("g",{class:stencil?"digit digit-stencil":"digit digit-segment",transform:"translate("+(x+6)+" 27)","data-char":char});
   const active = new Set(SEGMENTS[char]);
-
-  Object.keys(SEGMENT_GEOMETRY).forEach(function (name) {
-    const geometry = SEGMENT_GEOMETRY[name];
-    const rx = geometry[0];
-    const ry = geometry[1];
-    const width = geometry[2];
-    const height = geometry[3];
-    const node = svgEl("rect", {
-      x: rx,
-      y: ry,
-      width: width,
-      height: height,
-      rx: Math.min(width, height) / 2,
-      class: "segment-piece",
-      "data-segment": name,
-      "data-axis": width > height ? "x" : "y"
-    });
-
-    node.dataset.on = active.has(name) ? "1" : "0";
-    node.style.opacity = active.has(name) ? "1" : "var(--segment-ghost)";
-    group.appendChild(node);
+  Object.entries(SEGMENT_GEOMETRY).forEach(([name,[rx,ry,w,h]])=>{
+    const n = stencil
+      ? svgEl("path",{d:stencilPath(rx,ry,w,h),class:"stencil-piece","data-segment":name,"data-axis":w>h?"x":"y"})
+      : svgEl("rect",{x:rx,y:ry,width:w,height:h,rx:Math.min(w,h)/2,class:"segment-piece","data-segment":name,"data-axis":w>h?"x":"y"});
+    n.dataset.on = active.has(name) ? "1" : "0";
+    n.style.opacity = active.has(name) ? "1" : "var(--segment-ghost)";
+    g.appendChild(n);
   });
-
-  return group;
+  return g;
 }
 
-function stencilSegmentPath(x, y, width, height) {
-  const cut = Math.min(width, height) * 0.32;
-  return [
-    "M", x + cut, y,
-    "H", x + width - cut,
-    "L", x + width, y + cut,
-    "V", y + height - cut,
-    "L", x + width - cut, y + height,
-    "H", x + cut,
-    "L", x, y + height - cut,
-    "V", y + cut,
-    "Z"
-  ].join(" ");
+function createWireDigit(char, x){
+  const g = svgEl("g",{class:"digit digit-wire",transform:"translate("+(x+5)+" 36)","data-char":char});
+  const skeleton = svgEl("path",{d:WIRE_PATHS[char],class:"wire-skeleton"});
+  const active = svgEl("path",{d:WIRE_PATHS[char],class:"wire-active"});
+  active.dataset.on="1";
+  g.append(skeleton,active);
+  return g;
 }
 
-function createStencilDigit(char, x) {
-  const group = svgEl("g", {
-    class: "digit digit-stencil",
-    transform: "translate(" + (x + 6) + " 27)",
-    "data-char": char
-  });
-
-  const active = new Set(SEGMENTS[char]);
-
-  Object.keys(SEGMENT_GEOMETRY).forEach(function (name) {
-    const geometry = SEGMENT_GEOMETRY[name];
-    const rx = geometry[0];
-    const ry = geometry[1];
-    const width = geometry[2];
-    const height = geometry[3];
-    const node = svgEl("path", {
-      d: stencilSegmentPath(rx, ry, width, height),
-      class: "stencil-piece",
-      "data-segment": name,
-      "data-axis": width > height ? "x" : "y"
-    });
-
-    node.dataset.on = active.has(name) ? "1" : "0";
-    node.style.opacity = active.has(name) ? "1" : "var(--segment-ghost)";
-    group.appendChild(node);
-  });
-
-  return group;
+function createDigit(style,char,x){
+  if(style==="segment") return createSegmentDigit(char,x,false);
+  if(style==="stencil") return createSegmentDigit(char,x,true);
+  if(style==="hybrid") return createDotDigit(char,x,true);
+  if(style==="wire") return createWireDigit(char,x);
+  return createDotDigit(char,x,false);
 }
 
-function createWireDigit(char, x) {
-  const group = svgEl("g", {
-    class: "digit digit-wire",
-    transform: "translate(" + (x + 5) + " 36)",
-    "data-char": char
-  });
-
-  const skeleton = svgEl("path", {
-    d: WIRE_PATHS[char],
-    class: "wire-skeleton"
-  });
-
-  const active = svgEl("path", {
-    d: WIRE_PATHS[char],
-    class: "wire-active"
-  });
-  active.dataset.on = "1";
-
-  group.appendChild(skeleton);
-  group.appendChild(active);
-  return group;
+function createSeparator(style, kind){
+  const g = svgEl("g",{class:"colon colon-"+style,transform:"translate("+SEP_X+" 27)","aria-hidden":"true"});
+  const one = kind==="date";
+  const add = (cy)=>{
+    if(style==="wire") g.appendChild(svgEl("circle",{cx:7,cy,r:5.5,fill:"none",stroke:"currentColor","stroke-width":4}));
+    else if(style==="stencil") g.appendChild(svgEl("path",{d:"M7 "+(cy-9)+" L16 "+cy+" L7 "+(cy+9)+" L-2 "+cy+" Z"}));
+    else if(style==="segment") g.appendChild(svgEl("rect",{x:0,y:cy-7,width:14,height:14,rx:7}));
+    else g.appendChild(svgEl("circle",{cx:7,cy,r:style==="hybrid"?6:7.5}));
+  };
+  if(one) add(128); else { add(71); add(127); }
+  return g;
 }
 
-function createColon(style) {
-  const group = svgEl("g", {
-    class: "colon colon-" + style,
-    transform: "translate(" + COLON_X + " 27)",
-    "aria-hidden": "true"
-  });
-
-  if (style === "segment") {
-    group.appendChild(svgEl("rect", { x: 0, y: 64, width: 14, height: 14, rx: 7 }));
-    group.appendChild(svgEl("rect", { x: 0, y: 120, width: 14, height: 14, rx: 7 }));
-  } else if (style === "hybrid") {
-    group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 6 }));
-    group.appendChild(svgEl("rect", { x: 1, y: 116, width: 12, height: 20, rx: 6 }));
-  } else if (style === "wire") {
-    group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 4 }));
-    group.appendChild(svgEl("circle", { cx: 7, cy: 127, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 4 }));
-  } else if (style === "stencil") {
-    group.appendChild(svgEl("path", { d: "M7 62 L16 71 L7 80 L-2 71 Z" }));
-    group.appendChild(svgEl("path", { d: "M7 118 L16 127 L7 136 L-2 127 Z" }));
-  } else {
-    group.appendChild(svgEl("circle", { cx: 7, cy: 71, r: 7.5 }));
-    group.appendChild(svgEl("circle", { cx: 7, cy: 127, r: 7.5 }));
-  }
-
-  return group;
-}
-
-function createDigit(style, char, x) {
-  if (style === "segment") return createSegmentDigit(char, x);
-  if (style === "hybrid") return createDotDigit(char, x, true);
-  if (style === "wire") return createWireDigit(char, x);
-  if (style === "stencil") return createStencilDigit(char, x);
-  return createDotDigit(char, x, false);
-}
-
-function createLayer(style, digits) {
-  const layer = svgEl("g", {
-    class: "time-layer",
-    "data-style": style
-  });
-
-  digits.forEach(function (char, index) {
-    const digit = createDigit(style, char, DIGIT_X[index]);
-    digit.dataset.index = String(index);
+function createNumericLayer(digits, separator){
+  const layer = svgEl("g",{class:"time-layer","data-style":glyphStyle});
+  digits.forEach((ch,i)=>{
+    const digit = createDigit(glyphStyle,ch,X[i]);
+    digit.dataset.index=String(i);
     layer.appendChild(digit);
   });
-
-  layer.appendChild(createColon(style));
+  layer.appendChild(createSeparator(glyphStyle,separator||"time"));
   return layer;
 }
 
-function animateEntrance(layer) {
-  const pieces = Array.from(
-    layer.querySelectorAll(".glyph-pixel, .segment-piece, .stencil-piece, .wire-active")
-  ).filter(function (piece) {
-    return piece.dataset.on === "1";
-  });
-
-  pieces.forEach(function (piece, index) {
-    if (!canAnimate(piece)) return;
-    piece.animate(
-      [
-        { opacity: 0.16, transform: "scale(.95)" },
-        { opacity: 1, transform: "scale(1)" }
-      ],
-      {
-        duration: 250,
-        delay: Math.min(index * 4, 80),
-        easing: "cubic-bezier(.16,1,.3,1)",
-        fill: "both"
-      }
-    );
-  });
+function weatherFamily(code){
+  if(code===0) return "clear";
+  if(code===1 || code===2) return "partly";
+  if(code===3 || code===45 || code===48) return "cloud";
+  if((code>=51&&code<=67)||(code>=80&&code<=82)) return "rain";
+  if((code>=71&&code<=77)||(code>=85&&code<=86)) return "snow";
+  if(code>=95) return "storm";
+  return "cloud";
 }
 
-function mountInitialLayer() {
-  displayedDigits = nowDigits();
-  currentLayer = createLayer(glyphStyle, displayedDigits);
-  clock.replaceChildren(currentLayer);
-  clock.setAttribute("viewBox", VIEWBOX);
-  clock.setAttribute("aria-label", timeLabel(displayedDigits));
-  animateEntrance(currentLayer);
+function weatherLabel(code){
+  const f = weatherFamily(code);
+  return ({clear:"CLEAR",partly:"PARTLY CLOUDY",cloud:"CLOUDY",rain:"RAIN",snow:"SNOW",storm:"STORM"})[f];
 }
 
-function animateDotCell(piece, fromOn, toOn, index) {
-  const ghost = parseFloat(getComputedStyle(app).getPropertyValue("--glyph-ghost")) || 0.07;
-  const fromOpacity = fromOn ? 1 : ghost;
-  const toOpacity = toOn ? 1 : ghost;
+function createWeatherIcon(code){
+  const f = weatherFamily(code);
+  const g = svgEl("g",{class:"weather-icon",transform:"translate(28 28)"});
+  const line=(x1,y1,x2,y2,w=7)=>g.appendChild(svgEl("line",{x1,y1,x2,y2,stroke:"currentColor","stroke-width":w,"stroke-linecap":"round",class:"weather-stroke"}));
+  const dot=(x,y,r=6)=>g.appendChild(svgEl("circle",{cx:x,cy:y,r,class:"weather-particle"}));
 
-  if (fromOn === toOn || !canAnimate(piece)) {
-    piece.style.opacity = String(toOpacity);
-    piece.dataset.on = toOn ? "1" : "0";
-    return;
+  if(f==="clear" || f==="partly"){
+    g.appendChild(svgEl("circle",{cx:76,cy:62,r:28,fill:"none",stroke:"currentColor","stroke-width":8,class:"weather-orbit"}));
+    for(let i=0;i<8;i++){
+      const a=Math.PI*2*i/8;
+      line(76+Math.cos(a)*42,62+Math.sin(a)*42,76+Math.cos(a)*55,62+Math.sin(a)*55,6);
+    }
+  }
+  if(f!=="clear"){
+    g.appendChild(svgEl("path",{d:"M26 118 C26 98 42 84 62 84 C70 62 92 50 114 58 C133 64 144 79 144 98 C160 102 170 113 170 128 C170 146 156 158 137 158 H55 C36 158 22 144 22 128 C22 124 23 121 26 118 Z",fill:"none",stroke:"currentColor","stroke-width":8,"stroke-linecap":"round","stroke-linejoin":"round",class:"weather-cloud"}));
+  }
+  if(f==="rain" || f==="storm") for(let i=0;i<4;i++) line(48+i*29,174,41+i*29,194,6);
+  if(f==="snow") for(let i=0;i<4;i++) dot(48+i*29,184,5);
+  if(f==="storm") g.appendChild(svgEl("path",{d:"M98 164 L79 190 H96 L83 216 L121 178 H103 L116 164 Z",class:"weather-flash"}));
+  return g;
+}
+
+function createDegree(x){
+  const g = svgEl("g",{class:"degree-mark",transform:"translate("+x+" 58)"});
+  if(glyphStyle==="wire" || glyphStyle==="segment" || glyphStyle==="stencil"){
+    g.appendChild(svgEl("circle",{cx:14,cy:14,r:10,fill:"none",stroke:"currentColor","stroke-width":5}));
+  }else{
+    for(let i=0;i<8;i++){
+      const a=Math.PI*2*i/8;
+      g.appendChild(svgEl("circle",{cx:14+Math.cos(a)*10,cy:14+Math.sin(a)*10,r:2.7,class:"weather-particle"}));
+    }
+  }
+  return g;
+}
+
+function createWeatherLayer(){
+  const layer = svgEl("g",{class:"time-layer weather-layer","data-style":glyphStyle});
+  layer.appendChild(createWeatherIcon(weather.code==null?3:weather.code));
+  if(weather.temperature==null){
+    const t = svgEl("text",{x:330,y:145,class:"weather-placeholder","text-anchor":"middle"});
+    t.textContent="··";
+    layer.appendChild(t);
+    return layer;
   }
 
-  const animation = piece.animate(
-    [
-      { opacity: fromOpacity, transform: fromOn ? "scale(1)" : "scale(.92)" },
-      { opacity: toOpacity, transform: toOn ? "scale(1)" : "scale(.94)" }
-    ],
-    {
-      duration: 280,
-      delay: (index % 5) * 6 + Math.floor(index / 5) * 3,
-      easing: "cubic-bezier(.16,1,.3,1)",
-      fill: "both"
-    }
-  );
+  let v=Math.round(weather.temperature);
+  v=Math.max(-99,Math.min(99,v));
+  const neg=v<0;
+  const digits=String(Math.abs(v)).padStart(2,"0").split("");
+  const pos=neg?[350,505]:[330,485];
 
-  animation.finished.catch(function () {}).then(function () {
-    piece.style.opacity = String(toOpacity);
-    piece.style.transform = "";
-    piece.dataset.on = toOn ? "1" : "0";
-  });
-}
-
-function animateSegmentPiece(piece, fromOn, toOn, index) {
-  const ghost = parseFloat(getComputedStyle(app).getPropertyValue("--segment-ghost")) || 0.065;
-  const fromOpacity = fromOn ? 1 : ghost;
-  const toOpacity = toOn ? 1 : ghost;
-
-  if (fromOn === toOn || !canAnimate(piece)) {
-    piece.style.opacity = String(toOpacity);
-    piece.dataset.on = toOn ? "1" : "0";
-    return;
+  if(neg){
+    const minus=svgEl("g",{class:"weather-minus",transform:"translate(215 27)"});
+    minus.appendChild(svgEl("rect",{x:22,y:90,width:78,height:14,rx:7}));
+    layer.appendChild(minus);
   }
+  digits.forEach((ch,i)=>{
+    const d=createDigit(glyphStyle,ch,pos[i]);
+    d.dataset.index=String(i);
+    layer.appendChild(d);
+  });
+  layer.appendChild(createDegree(neg?648:628));
+  return layer;
+}
 
-  const axis = piece.dataset.axis;
-  const quietScale = axis === "x" ? "scaleX(.92)" : "scaleY(.92)";
-  const animation = piece.animate(
-    [
-      { opacity: fromOpacity, transform: fromOn ? "scale(1)" : quietScale },
-      { opacity: toOpacity, transform: toOn ? "scale(1)" : quietScale }
-    ],
-    {
-      duration: 260,
-      delay: index * 8,
-      easing: "cubic-bezier(.16,1,.3,1)",
-      fill: "both"
+function createFocusRail(remaining,duration){
+  const g=svgEl("g",{class:"focus-rail","aria-hidden":"true"});
+  const activeCount=Math.ceil((duration?remaining/duration:0)*25);
+  for(let i=0;i<25;i++){
+    const x=90+i*21.2;
+    let n;
+    if(glyphStyle==="wire") n=svgEl("circle",{cx:x,cy:238,r:4.2,fill:"none",stroke:"currentColor","stroke-width":2.5});
+    else if(glyphStyle==="segment" || glyphStyle==="stencil") n=svgEl("rect",{x:x-5,y:234,width:10,height:8,rx:glyphStyle==="stencil"?1:4});
+    else n=svgEl("circle",{cx:x,cy:238,r:glyphStyle==="hybrid"?4:4.5});
+    n.classList.add("focus-node");
+    n.dataset.on=i<activeCount?"1":"0";
+    n.style.opacity=i<activeCount?".82":".08";
+    g.appendChild(n);
+  }
+  return g;
+}
+
+function currentCountdown(state){
+  if(state.running){
+    state.remaining=Math.max(0,Math.ceil((state.endAt-Date.now())/1000));
+    if(state.remaining<=0){
+      state.remaining=0;
+      state.running=false;
+      finishPulse();
     }
-  );
+  }
+  return state.remaining;
+}
 
-  animation.finished.catch(function () {}).then(function () {
-    piece.style.opacity = String(toOpacity);
-    piece.style.transform = "";
-    piece.dataset.on = toOn ? "1" : "0";
+function formatPair(total){
+  const s=Math.max(0,Math.floor(total));
+  const mm=String(Math.floor(s/60)).padStart(2,"0");
+  const ss=String(s%60).padStart(2,"0");
+  return [mm[0],mm[1],ss[0],ss[1]];
+}
+
+function modePayload(){
+  const now=new Date();
+  if(mode==="clock"){
+    const hh=String(now.getHours()).padStart(2,"0"), mm=String(now.getMinutes()).padStart(2,"0");
+    const d=[hh[0],hh[1],mm[0],mm[1]];
+    return {token:"clock:"+d.join(""),digits:d,separator:"time"};
+  }
+  if(mode==="date"){
+    const dd=String(now.getDate()).padStart(2,"0"), mm=String(now.getMonth()+1).padStart(2,"0");
+    const d=[dd[0],dd[1],mm[0],mm[1]];
+    return {token:"date:"+d.join(""),digits:d,separator:"date"};
+  }
+  if(mode==="timer"){
+    const d=formatPair(currentCountdown(timerState));
+    return {token:"timer:"+d.join(""),digits:d,separator:"time"};
+  }
+  if(mode==="focus"){
+    const d=formatPair(currentCountdown(focusState));
+    return {token:"focus:"+d.join(""),digits:d,separator:"time"};
+  }
+  return {token:"weather:"+weather.temperature+":"+weather.code+":"+weather.loading+":"+weather.error};
+}
+
+function updateMeta(){
+  const now=new Date();
+  if(mode==="clock") modeMeta.textContent="";
+  else if(mode==="date") modeMeta.textContent=WEEKDAYS[now.getDay()]+" · "+MONTHS[now.getMonth()]+" "+now.getFullYear();
+  else if(mode==="weather"){
+    if(weather.loading) modeMeta.textContent="LOCATING · WEATHER";
+    else if(weather.error) modeMeta.textContent=weather.error;
+    else if(weather.loaded) modeMeta.textContent=weatherLabel(weather.code)+(weather.apparent==null?"":" · FEELS "+Math.round(weather.apparent)+"°");
+    else modeMeta.textContent="TAP · LOCATE";
+  } else if(mode==="timer") modeMeta.textContent=timerState.running?"TIMER · RUNNING":"TIMER · "+Math.round(timerState.duration/60)+" MIN";
+  else modeMeta.textContent=focusState.running?"FOCUS · STAY HERE":"FOCUS · 25 MIN";
+}
+
+function animateEntrance(layer){
+  const pieces=Array.from(layer.querySelectorAll(".glyph-pixel,.segment-piece,.stencil-piece,.wire-active,.weather-particle,.weather-stroke,.weather-cloud,.focus-node"));
+  pieces.forEach((piece,i)=>{
+    if(!canAnimate(piece)) return;
+    piece.animate([{opacity:.12,transform:"scale(.94)"},{opacity:1,transform:"scale(1)"}],{duration:260,delay:Math.min(i*4,90),easing:"cubic-bezier(.16,1,.3,1)"});
   });
 }
 
-function replaceDigitGroup(oldGroup, nextGroup) {
+function mountMode(entrance=true){
+  const p=modePayload();
+  let layer;
+  if(mode==="weather"){
+    layer=createWeatherLayer();
+    displayedDigits=[];
+  } else {
+    layer=createNumericLayer(p.digits,p.separator);
+    displayedDigits=p.digits.slice();
+    if(mode==="focus") layer.appendChild(createFocusRail(focusState.remaining,focusState.duration));
+  }
+  currentLayer=layer;
+  displayToken=p.token;
+  clock.replaceChildren(layer);
+  updateMeta();
+  updateActions();
+  updateModeButtons();
+  if(entrance) animateEntrance(layer);
+}
+
+function animateDot(piece,fromOn,toOn,index){
+  if(fromOn===toOn) return;
+  const ghost=parseFloat(getComputedStyle(app).getPropertyValue("--glyph-ghost"))||.07;
+  const a=piece.animate([{opacity:fromOn?1:ghost,transform:fromOn?"scale(1)":"scale(.9)"},{opacity:toOn?1:ghost,transform:toOn?"scale(1)":"scale(.94)"}],{duration:300,delay:(index%5)*7+Math.floor(index/5)*3,easing:"cubic-bezier(.16,1,.3,1)",fill:"both"});
+  a.finished.catch(()=>{}).then(()=>{piece.style.opacity=String(toOn?1:ghost);piece.style.transform="";piece.dataset.on=toOn?"1":"0";});
+}
+
+function animateSegment(piece,fromOn,toOn,index){
+  if(fromOn===toOn) return;
+  const ghost=parseFloat(getComputedStyle(app).getPropertyValue("--segment-ghost"))||.07;
+  const quiet=piece.dataset.axis==="x"?"scaleX(.86)":"scaleY(.86)";
+  const a=piece.animate([{opacity:fromOn?1:ghost,transform:fromOn?"scale(1)":quiet},{opacity:toOn?1:ghost,transform:toOn?"scale(1)":quiet}],{duration:280,delay:index*9,easing:"cubic-bezier(.16,1,.3,1)",fill:"both"});
+  a.finished.catch(()=>{}).then(()=>{piece.style.opacity=String(toOn?1:ghost);piece.style.transform="";piece.dataset.on=toOn?"1":"0";});
+}
+
+function replaceDigit(oldGroup,nextGroup){
   oldGroup.after(nextGroup);
+  if(!canAnimate(oldGroup) || !canAnimate(nextGroup)){oldGroup.remove();return;}
+  const out=oldGroup.animate([{opacity:1,transform:"translateY(0) scale(1)"},{opacity:0,transform:"translateY(-6px) scale(.975)"}],{duration:220,fill:"forwards",easing:"ease"});
+  const inn=nextGroup.animate([{opacity:0,transform:"translateY(7px) scale(.97)"},{opacity:1,transform:"translateY(0) scale(1)"}],{duration:300,fill:"both",easing:"cubic-bezier(.16,1,.3,1)"});
+  Promise.allSettled([out.finished,inn.finished]).then(()=>oldGroup.remove());
+}
 
-  if (!canAnimate(oldGroup) || !canAnimate(nextGroup)) {
-    oldGroup.remove();
+function updateDigit(group,oldChar,newChar){
+  if(oldChar===newChar) return;
+  const index=Number(group.dataset.index);
+  if(glyphStyle==="wire"){
+    const next=createWireDigit(newChar,X[index]);
+    next.dataset.index=String(index);
+    replaceDigit(group,next);
     return;
   }
+  group.dataset.char=newChar;
+  if(glyphStyle==="segment" || glyphStyle==="stencil"){
+    const oldSet=new Set(SEGMENTS[oldChar]), newSet=new Set(SEGMENTS[newChar]);
+    const selector=glyphStyle==="stencil"?".stencil-piece":".segment-piece";
+    Array.from(group.querySelectorAll(selector)).forEach((piece,i)=>animateSegment(piece,oldSet.has(piece.dataset.segment),newSet.has(piece.dataset.segment),i));
+  } else {
+    const oldSet=patternSet(oldChar), newSet=patternSet(newChar);
+    Array.from(group.querySelectorAll(".glyph-pixel")).forEach((piece,i)=>animateDot(piece,oldSet.has(i),newSet.has(i),i));
+  }
+}
 
-  const outAnimation = oldGroup.animate(
-    [
-      { opacity: 1, transform: "translateY(0) scale(1)" },
-      { opacity: 0, transform: "translateY(-4px) scale(.985)" }
-    ],
-    {
-      duration: 210,
-      easing: "cubic-bezier(.4,0,.2,1)",
-      fill: "forwards"
-    }
+function tickDisplay(){
+  const p=modePayload();
+  if(p.token===displayToken){updateMeta();return;}
+  if(mode==="weather"){mountMode(false);return;}
+
+  const groups=Array.from(currentLayer.querySelectorAll(".digit"));
+  if(groups.length!==4 || displayedDigits.length!==4){mountMode(false);return;}
+  p.digits.forEach((ch,i)=>updateDigit(groups[i],displayedDigits[i],ch));
+  displayedDigits=p.digits.slice();
+  displayToken=p.token;
+
+  if(mode==="focus"){
+    const oldRail=currentLayer.querySelector(".focus-rail");
+    const newRail=createFocusRail(focusState.remaining,focusState.duration);
+    if(oldRail) oldRail.replaceWith(newRail); else currentLayer.appendChild(newRail);
+  }
+  updateMeta();
+  updateActions();
+}
+
+function transitionTo(axis,dir){
+  transitioning=true;
+  const previous=currentLayer;
+  const p=modePayload();
+  let next;
+  if(mode==="weather") next=createWeatherLayer();
+  else {
+    next=createNumericLayer(p.digits,p.separator);
+    if(mode==="focus") next.appendChild(createFocusRail(focusState.remaining,focusState.duration));
+  }
+  currentLayer=next;
+  displayedDigits=p.digits?p.digits.slice():[];
+  displayToken=p.token;
+  clock.appendChild(next);
+  updateMeta(); updateActions(); updateModeButtons();
+
+  if(!canAnimate(previous) || !canAnimate(next)){ if(previous) previous.remove(); transitioning=false; return; }
+  const outMove=axis==="x"?"translateX("+(dir*-26)+"px)":"translateY("+(dir*-24)+"px)";
+  const inMove=axis==="x"?"translateX("+(dir*28)+"px)":"translateY("+(dir*26)+"px)";
+  const a=previous.animate([{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"},{opacity:0,transform:outMove+" scale(.98)",filter:"blur(4px)"}],{duration:260,fill:"forwards",easing:"ease"});
+  const b=next.animate([{opacity:0,transform:inMove+" scale(.98)",filter:"blur(4px)"},{opacity:1,transform:"translate(0,0) scale(1)",filter:"blur(0)"}],{duration:340,fill:"both",easing:"cubic-bezier(.16,1,.3,1)"});
+  animateEntrance(next);
+  Promise.allSettled([a.finished,b.finished]).then(()=>{previous.remove();transitioning=false;});
+}
+
+function switchStyle(next,dir){
+  if(!STYLES.includes(next) || next===glyphStyle || transitioning) return;
+  const oldIndex=STYLES.indexOf(glyphStyle), newIndex=STYLES.indexOf(next);
+  glyphStyle=next; setStore("glyph-style",glyphStyle); updateStyleButtons();
+  transitionTo("x",typeof dir==="number"?dir:(newIndex>oldIndex?1:-1));
+}
+
+function switchMode(next,dir){
+  if(!MODES.includes(next) || next===mode || transitioning) return;
+  const oldIndex=MODES.indexOf(mode), newIndex=MODES.indexOf(next);
+  mode=next; setStore("display-mode",mode); app.dataset.mode=mode;
+  transitionTo("y",typeof dir==="number"?dir:(newIndex>oldIndex?1:-1));
+}
+
+function updateStyleButtons(){
+  app.dataset.style=glyphStyle;
+  styleButtons.forEach(b=>{const active=b.dataset.styleChoice===glyphStyle;b.classList.toggle("active",active);b.setAttribute("aria-pressed",String(active));});
+}
+
+function updateModeButtons(){
+  modeButtons.forEach(b=>{const active=b.dataset.modeChoice===mode;b.classList.toggle("active",active);b.setAttribute("aria-current",active?"true":"false");});
+}
+
+function actionButton(label,action,primary=false){
+  const b=document.createElement("button");
+  b.type="button"; b.className="mode-action"+(primary?" primary":""); b.textContent=label; b.dataset.action=action;
+  return b;
+}
+
+function updateActions(){
+  modeActions.replaceChildren();
+  if(mode==="weather") modeActions.appendChild(actionButton(weather.loading?"…":"LOCATE","weather",true));
+  else if(mode==="timer"){
+    modeActions.append(actionButton("−","timer-minus"),actionButton(timerState.running?"PAUSE":"START","timer-toggle",true),actionButton("RESET","timer-reset"),actionButton("+","timer-plus"));
+  } else if(mode==="focus"){
+    modeActions.append(actionButton(focusState.running?"PAUSE":"FOCUS","focus-toggle",true),actionButton("RESET","focus-reset"));
+  }
+  modeActions.classList.toggle("has-actions",modeActions.children.length>0);
+}
+
+function toggleCountdown(state){
+  if(state.running){state.remaining=Math.max(0,Math.ceil((state.endAt-Date.now())/1000));state.running=false;}
+  else if(state.remaining>0){state.running=true;state.endAt=Date.now()+state.remaining*1000;}
+  displayToken="";tickDisplay();
+}
+function resetCountdown(state){state.running=false;state.remaining=state.duration;state.endAt=0;displayToken="";tickDisplay();}
+function adjustTimer(delta){
+  if(timerState.running) return;
+  timerState.duration=Math.max(60,Math.min(3600,timerState.duration+delta*60));
+  timerState.remaining=timerState.duration;
+  setStore("timer-duration",String(timerState.duration));
+  displayToken="";tickDisplay();
+}
+function finishPulse(){
+  if(!canAnimate(clock)) return;
+  clock.animate([{opacity:1,transform:"scale(1)"},{opacity:.4,transform:"scale(.97)"},{opacity:1,transform:"scale(1.015)"},{opacity:1,transform:"scale(1)"}],{duration:850,easing:"cubic-bezier(.16,1,.3,1)"});
+}
+
+function requestWeather(){
+  if(weather.loading) return;
+  weather.loading=true; weather.error=""; displayToken=""; tickDisplay();
+  if(!navigator.geolocation){weather.loading=false;weather.error="LOCATION UNAVAILABLE";displayToken="";tickDisplay();return;}
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      const lat=encodeURIComponent(pos.coords.latitude), lon=encodeURIComponent(pos.coords.longitude);
+      const url="https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,apparent_temperature,weather_code&timezone=auto";
+      fetch(url).then(r=>{if(!r.ok) throw new Error("weather");return r.json();}).then(data=>{
+        weather.loading=false; weather.loaded=true;
+        weather.temperature=data.current?data.current.temperature_2m:null;
+        weather.apparent=data.current?data.current.apparent_temperature:null;
+        weather.code=data.current?data.current.weather_code:null;
+        displayToken="";tickDisplay();
+      }).catch(()=>{weather.loading=false;weather.error="WEATHER OFFLINE";displayToken="";tickDisplay();});
+    },
+    ()=>{weather.loading=false;weather.error="LOCATION OFF";displayToken="";tickDisplay();},
+    {enableHighAccuracy:false,timeout:9000,maximumAge:600000}
   );
-
-  const inAnimation = nextGroup.animate(
-    [
-      { opacity: 0, transform: "translateY(4px) scale(.985)" },
-      { opacity: 1, transform: "translateY(0) scale(1)" }
-    ],
-    {
-      duration: 260,
-      easing: "cubic-bezier(.16,1,.3,1)",
-      fill: "both"
-    }
-  );
-
-  Promise.allSettled([outAnimation.finished, inAnimation.finished]).then(function () {
-    oldGroup.remove();
-  });
 }
 
-function updateDigit(group, oldChar, newChar, style) {
-  if (oldChar === newChar) return;
-
-  if (style === "wire") {
-    const index = Number(group.dataset.index);
-    const nextGroup = createWireDigit(newChar, DIGIT_X[index]);
-    nextGroup.dataset.index = String(index);
-    replaceDigitGroup(group, nextGroup);
-    return;
-  }
-
-  group.dataset.char = newChar;
-
-  if (style === "segment" || style === "stencil") {
-    const oldActive = new Set(SEGMENTS[oldChar]);
-    const newActive = new Set(SEGMENTS[newChar]);
-    const selector = style === "stencil" ? ".stencil-piece" : ".segment-piece";
-
-    Array.from(group.querySelectorAll(selector)).forEach(function (piece, index) {
-      const name = piece.dataset.segment;
-      animateSegmentPiece(piece, oldActive.has(name), newActive.has(name), index);
-    });
-    return;
-  }
-
-  const oldActive = patternSet(oldChar);
-  const newActive = patternSet(newChar);
-
-  Array.from(group.querySelectorAll(".glyph-pixel")).forEach(function (piece, index) {
-    animateDotCell(piece, oldActive.has(index), newActive.has(index), index);
-  });
+function applyTheme(animate){
+  app.classList.toggle("theme-dark",theme==="dark");
+  app.classList.toggle("theme-light",theme==="light");
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content",theme==="dark"?"#050505":"#f3f3ef");
+  if(animate && canAnimate(clock)) clock.animate([{transform:"scale(1)"},{transform:"scale(.985)"},{transform:"scale(1)"}],{duration:300,easing:"cubic-bezier(.16,1,.3,1)"});
 }
 
-function updateTime() {
-  const nextDigits = nowDigits();
-
-  if (!currentLayer) {
-    mountInitialLayer();
-    return;
-  }
-
-  if (nextDigits.join("") === displayedDigits.join("")) return;
-
-  const groups = Array.from(currentLayer.querySelectorAll(".digit"));
-  nextDigits.forEach(function (char, index) {
-    updateDigit(groups[index], displayedDigits[index], char, glyphStyle);
-  });
-
-  displayedDigits = nextDigits;
-  clock.setAttribute("aria-label", timeLabel(displayedDigits));
-}
-
-async function switchGlyphStyle(nextStyle, swipeDirection) {
-  if (STYLES.indexOf(nextStyle) < 0 || nextStyle === glyphStyle || transitioningStyle) return;
-
-  transitioningStyle = true;
-  const previousLayer = currentLayer;
-  const oldIndex = STYLES.indexOf(glyphStyle);
-  const newIndex = STYLES.indexOf(nextStyle);
-  const direction = typeof swipeDirection === "number"
-    ? swipeDirection
-    : (newIndex > oldIndex ? 1 : -1);
-
-  glyphStyle = nextStyle;
-  safeSet("glyph-style", glyphStyle);
-  updateStyleButtons();
-
-  const nextLayer = createLayer(glyphStyle, displayedDigits);
-  clock.appendChild(nextLayer);
-  currentLayer = nextLayer;
-
-  if (!canAnimate(previousLayer) || !canAnimate(nextLayer)) {
-    if (previousLayer) previousLayer.remove();
-    transitioningStyle = false;
-    return;
-  }
-
-  const outAnimation = previousLayer.animate(
-    [
-      { opacity: 1, transform: "translateX(0) scale(1)" },
-      { opacity: 0, transform: "translateX(" + (direction * -18) + "px) scale(.99)" }
-    ],
-    {
-      duration: 240,
-      easing: "cubic-bezier(.4,0,.2,1)",
-      fill: "forwards"
-    }
-  );
-
-  const inAnimation = nextLayer.animate(
-    [
-      { opacity: 0, transform: "translateX(" + (direction * 20) + "px) scale(.99)" },
-      { opacity: 1, transform: "translateX(0) scale(1)" }
-    ],
-    {
-      duration: 300,
-      easing: "cubic-bezier(.16,1,.3,1)",
-      fill: "both"
-    }
-  );
-
-  Promise.allSettled([outAnimation.finished, inAnimation.finished]).then(function () {
-    if (previousLayer) previousLayer.remove();
-    transitioningStyle = false;
-  });
-}
-
-function updateStyleButtons() {
-  app.dataset.style = glyphStyle;
-  styleButtons.forEach(function (button) {
-    const active = button.dataset.styleChoice === glyphStyle;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
-}
-
-function applyTheme(animate) {
-  app.classList.toggle("theme-dark", theme === "dark");
-  app.classList.toggle("theme-light", theme === "light");
-
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    meta.setAttribute("content", theme === "dark" ? "#050505" : "#f3f3ef");
-  }
-
-  if (animate && canAnimate(clock)) {
-    clock.animate(
-      [
-        { transform: "scale(1)" },
-        { transform: "scale(.99)" },
-        { transform: "scale(1)" }
-      ],
-      { duration: 280, easing: "cubic-bezier(.16,1,.3,1)" }
-    );
-  }
-}
-
-function showControls(autoHide) {
+function showControls(){
   app.classList.add("controls-visible");
   clearTimeout(controlsTimer);
-
-  if (autoHide !== false) {
-    controlsTimer = setTimeout(function () {
-      app.classList.remove("controls-visible");
-    }, 4200);
-  }
+  controlsTimer=setTimeout(()=>app.classList.remove("controls-visible"),5200);
 }
+function hideControls(){app.classList.remove("controls-visible");clearTimeout(controlsTimer);}
+function showToast(msg){toast.textContent=msg;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),950);}
+async function requestWakeLock(){if(!("wakeLock" in navigator)||document.visibilityState!=="visible")return;try{wakeLock=await navigator.wakeLock.request("screen");}catch(_){}}
 
-function hideControls() {
-  app.classList.remove("controls-visible");
-  clearTimeout(controlsTimer);
-}
+stage.addEventListener("click",()=>{app.classList.contains("controls-visible")?hideControls():showControls();requestWakeLock();});
+controls.addEventListener("click",e=>e.stopPropagation());
+modeActions.addEventListener("click",e=>{
+  e.stopPropagation();
+  const b=e.target.closest("[data-action]"); if(!b) return;
+  const a=b.dataset.action;
+  if(a==="weather") requestWeather();
+  if(a==="timer-minus") adjustTimer(-1);
+  if(a==="timer-plus") adjustTimer(1);
+  if(a==="timer-toggle") toggleCountdown(timerState);
+  if(a==="timer-reset") resetCountdown(timerState);
+  if(a==="focus-toggle") toggleCountdown(focusState);
+  if(a==="focus-reset") resetCountdown(focusState);
+  showControls();
+});
+styleButtons.forEach(b=>b.addEventListener("click",()=>{switchStyle(b.dataset.styleChoice);showControls();}));
+modeButtons.forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();switchMode(b.dataset.modeChoice);showToast(MODE_LABELS[b.dataset.modeChoice]);}));
+themeToggle.addEventListener("click",()=>{theme=theme==="dark"?"light":"dark";setStore("clock-theme",theme);applyTheme(true);showControls();});
 
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () {
-    toast.classList.remove("show");
-  }, 1000);
-}
-
-async function requestWakeLock() {
-  if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
-  try {
-    wakeLock = await navigator.wakeLock.request("screen");
-  } catch (_) {}
-}
-
-stage.addEventListener("click", function () {
-  if (app.classList.contains("controls-visible")) {
-    hideControls();
-  } else {
-    showControls(true);
+stage.addEventListener("touchstart",e=>{const t=e.changedTouches[0];touchStartX=t.clientX;touchStartY=t.clientY;},{passive:true});
+stage.addEventListener("touchend",e=>{
+  const t=e.changedTouches[0], dx=t.clientX-touchStartX, dy=t.clientY-touchStartY, ax=Math.abs(dx), ay=Math.abs(dy);
+  if(Math.max(ax,ay)<58) return;
+  if(ax>ay*1.18){
+    const i=STYLES.indexOf(glyphStyle), dir=dx<0?1:-1, next=STYLES[(i+dir+STYLES.length)%STYLES.length];
+    switchStyle(next,dir);showToast(STYLE_LABELS[next]);
+  } else if(ay>ax*1.18){
+    const i=MODES.indexOf(mode), dir=dy<0?1:-1, next=MODES[(i+dir+MODES.length)%MODES.length];
+    switchMode(next,dir);showToast(MODE_LABELS[next]);
   }
   requestWakeLock();
-});
+},{passive:true});
 
-controls.addEventListener("click", function (event) {
-  event.stopPropagation();
-});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){requestWakeLock();displayToken="";tickDisplay();}});
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(()=>{}));
 
-styleButtons.forEach(function (button) {
-  button.addEventListener("click", function () {
-    switchGlyphStyle(button.dataset.styleChoice);
-    showControls(true);
-  });
-});
-
-themeToggle.addEventListener("click", function () {
-  theme = theme === "dark" ? "light" : "dark";
-  safeSet("clock-theme", theme);
-  applyTheme(true);
-  showControls(true);
-});
-
-stage.addEventListener("touchstart", function (event) {
-  const touch = event.changedTouches[0];
-  touchStartX = touch.clientX;
-  touchStartY = touch.clientY;
-}, { passive: true });
-
-stage.addEventListener("touchend", function (event) {
-  const touch = event.changedTouches[0];
-  const dx = touch.clientX - touchStartX;
-  const dy = touch.clientY - touchStartY;
-
-  if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-
-  const index = STYLES.indexOf(glyphStyle);
-  const direction = dx < 0 ? 1 : -1;
-  const nextStyle = STYLES[(index + direction + STYLES.length) % STYLES.length];
-
-  switchGlyphStyle(nextStyle, direction);
-  showToast(STYLE_LABELS[nextStyle]);
-  requestWakeLock();
-}, { passive: true });
-
-document.addEventListener("visibilitychange", function () {
-  if (document.visibilityState === "visible") {
-    requestWakeLock();
-    updateTime();
-  }
-});
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./service-worker.js").catch(function () {});
-  });
-}
-
-clock.setAttribute("viewBox", VIEWBOX);
+app.dataset.mode=mode;
 updateStyleButtons();
+updateModeButtons();
 applyTheme(false);
-mountInitialLayer();
-setInterval(updateTime, 500);
+mountMode(true);
+setInterval(tickDisplay,500);
