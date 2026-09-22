@@ -1,7 +1,7 @@
 {
-  "name": "Glyph Clock",
-  "short_name": "Glyph Clock",
-  "description": "Minimal landscape clock with five custom glyph systems.",
+  "name": "Glyph Ambient",
+  "short_name": "Glyph",
+  "description": "Minimal ambient display with clock, date, weather, timer and focus modes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
