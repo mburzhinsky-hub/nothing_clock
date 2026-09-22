@@ -80,7 +80,7 @@ function nowDigits() {
 }
 
 function timeLabel(digits) {
-  return \`\${digits[0]}\${digits[1]}:\${digits[2]}\${digits[3]}\`;
+  return `${digits[0]}${digits[1]}:${digits[2]}${digits[3]}`;
 }
 
 function patternSet(char) {
@@ -96,7 +96,7 @@ function patternSet(char) {
 function createDotDigit(char, x, hybrid = false) {
   const group = svgEl("g", {
     class: hybrid ? "digit digit-hybrid" : "digit digit-dot",
-    transform: \`translate(\${x} 27)\`,
+    transform: `translate(${x} 27)`,
     "data-char": char
   });
 
@@ -150,7 +150,7 @@ function createDotDigit(char, x, hybrid = false) {
 function createSegmentDigit(char, x) {
   const group = svgEl("g", {
     class: "digit digit-segment",
-    transform: \`translate(\${x + 6} 27)\`,
+    transform: `translate(${x + 6} 27)`,
     "data-char": char
   });
 
@@ -177,8 +177,8 @@ function createSegmentDigit(char, x) {
 
 function createColon(style) {
   const group = svgEl("g", {
-    class: \`colon colon-\${style}\`,
-    transform: \`translate(\${COLON_X} 27)\`,
+    class: `colon colon-${style}`,
+    transform: `translate(${COLON_X} 27)`,
     "aria-hidden": "true"
   });
 
@@ -434,7 +434,7 @@ async function switchGlyphStyle(nextStyle, swipeDirection = null) {
   const outAnimation = previousLayer.animate(
     [
       { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" },
-      { opacity: 0, transform: \`translateX(\${direction * -28}px) scale(.975)\`, filter: "blur(8px)" }
+      { opacity: 0, transform: `translateX(${direction * -28}px) scale(.975)`, filter: "blur(8px)" }
     ],
     {
       duration: 360,
@@ -445,7 +445,7 @@ async function switchGlyphStyle(nextStyle, swipeDirection = null) {
 
   const inAnimation = nextLayer.animate(
     [
-      { opacity: 0, transform: \`translateX(\${direction * 34}px) scale(.975)\`, filter: "blur(10px)" },
+      { opacity: 0, transform: `translateX(${direction * 34}px) scale(.975)`, filter: "blur(10px)" },
       { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" }
     ],
     {
