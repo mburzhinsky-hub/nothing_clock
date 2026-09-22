@@ -13,12 +13,6 @@ const modeActions = document.getElementById("modeActions");
 const modeMeta = document.getElementById("modeMeta");
 const ambientWeather = document.getElementById("ambientWeather");
 const dreamCanvas = document.getElementById("dreamCanvas");
-const launcherGrid = document.getElementById("launcherGrid");
-const launcherEditor = document.getElementById("launcherEditor");
-const launcherLabel = document.getElementById("launcherLabel");
-const launcherUrl = document.getElementById("launcherUrl");
-const launcherSave = document.getElementById("launcherSave");
-const launcherCancel = document.getElementById("launcherCancel");
 const themeToggle = document.getElementById("themeToggle");
 const toast = document.getElementById("toast");
 const styleButtons = Array.from(document.querySelectorAll("[data-style-choice]"));
@@ -79,6 +73,7 @@ function svgEl(name, attrs){
 let glyphStyle = STYLES.includes(getStore("glyph-style")) ? getStore("glyph-style") : "dot";
 let theme = getStore("clock-theme") === "light" ? "light" : "dark";
 let mode = MODES.includes(getStore("display-mode")) ? getStore("display-mode") : "clock";
+if(getStore("display-mode")==="launcher"){ mode="clock"; setStore("display-mode","clock"); }
 let currentLayer = null;
 let displayedDigits = [];
 let displayToken = "";
@@ -86,8 +81,6 @@ let touchStartX = 0, touchStartY = 0;
 let transitioning = false;
 let controlsTimer = null, toastTimer = null, wakeLock = null;
 let actionToken = "";
-let launcherEditIndex = -1;
-let launcherHoldTimer = null;
 let dreamPhase = 0;
 let dreamMode = 0;
 let dreamFrame = 0;
@@ -104,29 +97,6 @@ const timerState = {
   running:false, endAt:0
 };
 const focusState = { duration:1500, remaining:1500, running:false, endAt:0 };
-
-const DEFAULT_LAUNCHER = [
-  { label:"MUSIC", url:"music://" },
-  { label:"MAPS", url:"maps://" },
-  { label:"YOUTUBE", url:"https://youtube.com/" },
-  { label:"TELEGRAM", url:"tg://" },
-  { label:"NOTES", url:"mobilenotes://" },
-  { label:"SHORTCUT", url:"shortcuts://" }
-];
-
-function loadLauncher(){
-  try{
-    const raw=getStore("launcher-items");
-    const parsed=raw?JSON.parse(raw):null;
-    if(Array.isArray(parsed) && parsed.length===6) return parsed.map((item,i)=>({
-      label:String(item.label||DEFAULT_LAUNCHER[i].label).slice(0,16),
-      url:String(item.url||DEFAULT_LAUNCHER[i].url).slice(0,240)
-    }));
-  }catch(_){}
-  return DEFAULT_LAUNCHER.map(item=>({...item}));
-}
-
-let launcherItems = loadLauncher();
 
 function patternSet(char){
   const set = new Set();
@@ -235,7 +205,13 @@ function weatherLabel(code){
 function createWeatherIcon(code){
   const f = weatherFamily(code);
   const g = svgEl("g",{class:"weather-icon weather-"+f,transform:"translate(28 28)"});
-  const line=(x1,y1,x2,y2,w=7)=>g.appendChild(svgEl("line",{x1,y1,x2,y2,stroke:"currentColor","stroke-width":w,"stroke-linecap":"round",class:"weather-stroke"}));
+  let strokeIndex=0;
+  const line=(x1,y1,x2,y2,w=7)=>{
+    const node=svgEl("line",{x1,y1,x2,y2,stroke:"currentColor","stroke-width":w,"stroke-linecap":"round",class:"weather-stroke"});
+    node.style.setProperty("--weather-index",String(strokeIndex++));
+    g.appendChild(node);
+    return node;
+  };
   const dot=(x,y,r=6)=>g.appendChild(svgEl("circle",{cx:x,cy:y,r,class:"weather-particle"}));
 
   if(f==="clear" || f==="partly"){
@@ -592,55 +568,6 @@ function finishPulse(){
   clock.animate([{opacity:1,transform:"scale(1)"},{opacity:.4,transform:"scale(.97)"},{opacity:1,transform:"scale(1.015)"},{opacity:1,transform:"scale(1)"}],{duration:850,easing:"cubic-bezier(.16,1,.3,1)"});
 }
 
-function renderLauncher(){
-  launcherGrid.replaceChildren();
-  launcherItems.forEach((item,index)=>{
-    const button=document.createElement("button");
-    button.type="button";
-    button.className="launcher-item";
-    button.dataset.index=String(index);
-    button.innerHTML='<span class="launcher-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="launcher-name"></span>';
-    button.querySelector(".launcher-name").textContent=item.label;
-    launcherGrid.appendChild(button);
-  });
-}
-
-function openLauncherEditor(index){
-  launcherEditIndex=index;
-  const item=launcherItems[index];
-  launcherLabel.value=item.label;
-  launcherUrl.value=item.url;
-  launcherEditor.hidden=false;
-  requestAnimationFrame(()=>launcherLabel.focus());
-}
-
-function closeLauncherEditor(){
-  launcherEditor.hidden=true;
-  launcherEditIndex=-1;
-}
-
-function saveLauncher(){
-  if(launcherEditIndex<0) return;
-  const label=launcherLabel.value.trim().slice(0,16)||"APP";
-  const url=launcherUrl.value.trim().slice(0,240);
-  if(!url){showToast("URL REQUIRED");return;}
-  launcherItems[launcherEditIndex]={label,url};
-  setStore("launcher-items",JSON.stringify(launcherItems));
-  renderLauncher();
-  closeLauncherEditor();
-  showToast("SAVED");
-}
-
-function launchItem(index){
-  const item=launcherItems[index];
-  if(!item || !item.url) return;
-  try{
-    window.location.href=item.url;
-  }catch(_){
-    showToast("CAN'T OPEN");
-  }
-}
-
 function updateAmbientWeather(){
   ambientWeather.replaceChildren();
   const family=weatherFamily(weather.code==null?3:weather.code);
@@ -778,7 +705,6 @@ function drawDream(){
 }
 
 function updateSpecialMode(){
-  launcherGrid.classList.remove("show");
   dreamCanvas.classList.toggle("show",mode==="dream");
   clock.classList.toggle("hidden-for-special",mode==="dream");
 
@@ -853,20 +779,6 @@ styleButtons.forEach(b=>b.addEventListener("click",()=>{switchStyle(b.dataset.st
 modeButtons.forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();switchMode(b.dataset.modeChoice);showToast(MODE_LABELS[b.dataset.modeChoice]);}));
 themeToggle.addEventListener("click",()=>{theme=theme==="dark"?"light":"dark";setStore("clock-theme",theme);applyTheme(true);showControls();});
 
-launcherGrid.addEventListener("pointerdown",e=>{
-  const button=e.target.closest(".launcher-item"); if(!button) return;
-  clearTimeout(launcherHoldTimer);
-  launcherHoldTimer=setTimeout(()=>{openLauncherEditor(Number(button.dataset.index));launcherHoldTimer=null;},620);
-});
-launcherGrid.addEventListener("pointerup",e=>{
-  const button=e.target.closest(".launcher-item"); if(!button) return;
-  if(launcherHoldTimer){clearTimeout(launcherHoldTimer);launcherHoldTimer=null;launchItem(Number(button.dataset.index));}
-});
-launcherGrid.addEventListener("pointercancel",()=>{clearTimeout(launcherHoldTimer);launcherHoldTimer=null;});
-launcherGrid.addEventListener("contextmenu",e=>{const b=e.target.closest(".launcher-item");if(b){e.preventDefault();openLauncherEditor(Number(b.dataset.index));}});
-launcherSave.addEventListener("click",saveLauncher);
-launcherCancel.addEventListener("click",closeLauncherEditor);
-launcherEditor.addEventListener("click",e=>{if(e.target===launcherEditor) closeLauncherEditor();});
 window.addEventListener("resize",()=>{if(mode==="dream")setupDreamParticles();});
 
 stage.addEventListener("touchstart",e=>{const t=e.changedTouches[0];touchStartX=t.clientX;touchStartY=t.clientY;},{passive:true});
