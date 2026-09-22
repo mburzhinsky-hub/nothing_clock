@@ -106,6 +106,260 @@ button { font: inherit; }
 
 .app[data-mode="clock"] .mode-meta { opacity: 0; }
 
+.ambient-weather {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: .22;
+  transition: opacity .5s var(--ease-out);
+}
+
+.ambient-weather i {
+  position: absolute;
+  left: var(--x);
+  top: -16%;
+  display: block;
+  width: 2px;
+  height: 44px;
+  border-radius: 99px;
+  background: currentColor;
+  opacity: .18;
+  animation: ambient-fall var(--d) linear infinite;
+  animation-delay: var(--delay);
+}
+
+.app[data-weather="snow"] .ambient-weather i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  opacity: .2;
+  animation-name: ambient-snow;
+}
+
+.app[data-weather="clear"] .ambient-weather i {
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  transform-origin: 0 0;
+  opacity: .16;
+  animation: ambient-orbit var(--d) linear infinite;
+}
+
+.app[data-weather="cloud"] .ambient-weather i,
+.app[data-weather="partly"] .ambient-weather i {
+  width: 34px;
+  height: 1px;
+  opacity: .08;
+  animation-name: ambient-cloud;
+}
+
+.app[data-weather="storm"] .ambient-weather i {
+  width: 2px;
+  height: 58px;
+  opacity: .16;
+  animation-duration: 2.7s;
+}
+
+.app[data-weather="none"] .ambient-weather {
+  opacity: 0;
+}
+
+.launcher-grid {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: min(78vw, 760px);
+  transform: translate(-50%, -48%) scale(.98);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .28s var(--ease-out), transform .34s var(--ease-out);
+  z-index: 3;
+}
+
+.launcher-grid.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.launcher-item {
+  min-width: 0;
+  min-height: 118px;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: rgba(255,255,255,.025);
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 11px;
+  cursor: pointer;
+  transition: transform .2s var(--ease-out), background .25s var(--ease-out), border-color .25s var(--ease-out);
+}
+
+.app.theme-light .launcher-item {
+  background: rgba(0,0,0,.025);
+}
+
+.launcher-item:active {
+  transform: scale(.96);
+}
+
+.launcher-glyph {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: block;
+}
+
+.launcher-glyph i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: launcher-breathe 3.2s ease-in-out infinite;
+}
+
+.launcher-glyph i:nth-child(1) { left: 4px; top: 4px; animation-delay: -.2s; }
+.launcher-glyph i:nth-child(2) { left: 24px; top: 2px; animation-delay: -.6s; }
+.launcher-glyph i:nth-child(3) { right: 4px; top: 5px; animation-delay: -1s; }
+.launcher-glyph i:nth-child(4) { left: 2px; top: 24px; animation-delay: -1.4s; }
+.launcher-glyph i:nth-child(5) { right: 2px; top: 24px; animation-delay: -1.8s; }
+.launcher-glyph i:nth-child(6) { left: 5px; bottom: 5px; animation-delay: -2.2s; }
+.launcher-glyph i:nth-child(7) { left: 24px; bottom: 2px; animation-delay: -2.6s; }
+.launcher-glyph i:nth-child(8) { right: 5px; bottom: 5px; animation-delay: -3s; }
+.launcher-glyph i:nth-child(9) { left: 24px; top: 24px; animation-delay: -1.2s; }
+
+.app[data-style="segment"] .launcher-glyph i,
+.app[data-style="stencil"] .launcher-glyph i {
+  width: 18px;
+  height: 5px;
+  border-radius: 2px;
+}
+
+.app[data-style="wire"] .launcher-glyph i {
+  background: transparent;
+  border: 1.5px solid currentColor;
+}
+
+.launcher-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .15em;
+}
+
+.launcher-editor {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0,0,0,.38);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 10;
+}
+
+.launcher-editor[hidden] {
+  display: none;
+}
+
+.launcher-editor-card {
+  width: min(92vw, 480px);
+  padding: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: var(--panel);
+  color: var(--fg);
+}
+
+.launcher-editor-title {
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .18em;
+}
+
+.launcher-editor label {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .13em;
+}
+
+.launcher-editor input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 0 13px;
+  background: transparent;
+  color: var(--fg);
+  outline: none;
+  font-size: 16px;
+}
+
+.launcher-editor input:focus {
+  border-color: currentColor;
+}
+
+.launcher-editor-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.launcher-editor-actions button {
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.launcher-editor-actions .primary {
+  color: var(--bg);
+  background: var(--fg);
+}
+
+.dream-canvas {
+  position: absolute;
+  width: min(92vw, 1200px);
+  height: min(64vh, 480px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s var(--ease-out);
+}
+
+.dream-canvas.show {
+  opacity: 1;
+}
+
+.clock.hidden-for-special {
+  opacity: 0;
+}
+
 .time-layer {
   transform-box: fill-box;
   transform-origin: center;
@@ -186,8 +440,9 @@ button { font: inherit; }
 .wire-active {
   stroke-width: 8.5;
   opacity: .94;
-  will-change: opacity, stroke-width;
-  animation: wire-live 6.2s ease-in-out infinite;
+  will-change: opacity, stroke-width, stroke-dashoffset;
+  stroke-dasharray: 18 11;
+  animation: wire-live 6.2s ease-in-out infinite, wire-travel 4.8s linear infinite;
 }
 
 .colon {
@@ -524,6 +779,37 @@ button { font: inherit; }
   50% { opacity: .94; transform: scale(1.12); }
 }
 
+@keyframes wire-travel {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -58; }
+}
+
+@keyframes launcher-breathe {
+  0%,100% { opacity: .36; transform: scale(.72); }
+  48% { opacity: 1; transform: scale(1.14); }
+}
+
+@keyframes ambient-fall {
+  from { transform: translate3d(0,-18vh,0) rotate(8deg); }
+  to { transform: translate3d(7vw,118vh,0) rotate(8deg); }
+}
+
+@keyframes ambient-snow {
+  0% { transform: translate3d(0,-12vh,0) scale(.8); }
+  50% { transform: translate3d(3vw,48vh,0) scale(1.25); }
+  100% { transform: translate3d(-2vw,114vh,0) scale(.8); }
+}
+
+@keyframes ambient-orbit {
+  from { transform: rotate(0deg) translateX(34vw) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(34vw) rotate(-360deg); }
+}
+
+@keyframes ambient-cloud {
+  from { transform: translate3d(-18vw,20vh,0); }
+  to { transform: translate3d(118vw,25vh,0); }
+}
+
 @media (max-width: 940px) {
   .chip {
     min-width: 0;
@@ -557,6 +843,28 @@ button { font: inherit; }
   .theme-toggle { height: 42px; }
   .mode-action { height: 36px; }
   .mode-meta { margin-top: -14px; }
+
+  .launcher-grid {
+    width: min(76vw, 720px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .launcher-item {
+    min-height: 86px;
+    border-radius: 18px;
+    gap: 6px;
+  }
+
+  .launcher-glyph {
+    width: 44px;
+    height: 44px;
+    transform: scale(.78);
+  }
+
+  .launcher-name {
+    font-size: 8px;
+  }
 }
 
 @media (orientation: portrait) {
@@ -574,5 +882,7 @@ button { font: inherit; }
   .wire-active,
   .weather-icon,
   .weather-particle,
-  .focus-node { animation-duration: 7s; }
+  .focus-node,
+  .launcher-glyph i,
+  .ambient-weather i { animation-duration: 7s; }
 }
