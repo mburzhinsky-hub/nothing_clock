@@ -15,12 +15,35 @@
 </head>
 <body>
   <main id="app" class="app theme-dark" data-style="dot" data-mode="clock" aria-label="Glyph ambient display">
+    <div id="ambientWeather" class="ambient-weather" aria-hidden="true"></div>
+
     <button id="stage" class="stage" type="button" aria-label="Показать настройки">
       <span class="display-shell">
         <svg id="clock" class="clock" viewBox="0 0 710 250" role="img" aria-label="Текущее отображение"></svg>
+        <canvas id="dreamCanvas" class="dream-canvas" aria-hidden="true"></canvas>
         <span id="modeMeta" class="mode-meta" aria-live="polite"></span>
       </span>
     </button>
+
+    <section id="launcherGrid" class="launcher-grid" aria-label="Быстрый доступ"></section>
+
+    <section id="launcherEditor" class="launcher-editor" aria-label="Редактирование ярлыка" hidden>
+      <div class="launcher-editor-card">
+        <div class="launcher-editor-title">QUICK ACCESS</div>
+        <label>
+          <span>NAME</span>
+          <input id="launcherLabel" type="text" maxlength="16" autocomplete="off" />
+        </label>
+        <label>
+          <span>URL / APP SCHEME</span>
+          <input id="launcherUrl" type="text" maxlength="240" inputmode="url" autocomplete="off" />
+        </label>
+        <div class="launcher-editor-actions">
+          <button id="launcherCancel" type="button">CANCEL</button>
+          <button id="launcherSave" class="primary" type="button">SAVE</button>
+        </div>
+      </div>
+    </section>
 
     <nav id="modeRail" class="mode-rail" aria-label="Режим">
       <button type="button" data-mode-choice="clock" aria-label="Clock"></button>
@@ -28,6 +51,8 @@
       <button type="button" data-mode-choice="weather" aria-label="Weather"></button>
       <button type="button" data-mode-choice="timer" aria-label="Timer"></button>
       <button type="button" data-mode-choice="focus" aria-label="Focus"></button>
+      <button type="button" data-mode-choice="launcher" aria-label="Launcher"></button>
+      <button type="button" data-mode-choice="dream" aria-label="Dream"></button>
     </nav>
 
     <section id="modeActions" class="mode-actions" aria-label="Управление режимом"></section>
