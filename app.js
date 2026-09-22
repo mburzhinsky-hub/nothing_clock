@@ -84,6 +84,7 @@ let actionToken = "";
 let dreamPhase = 0;
 let dreamMode = 0;
 let dreamFrame = 0;
+let dreamStartedAt = 0;
 let dreamParticles = [];
 let dreamLastTimeKey = "";
 let dreamTargetKey = "";
@@ -344,7 +345,7 @@ function updateMeta(){
     else modeMeta.textContent="TAP · LOCATE";
   } else if(mode==="timer") modeMeta.textContent=timerState.running?"TIMER · RUNNING":"TIMER · "+Math.round(timerState.duration/60)+" MIN";
   else if(mode==="focus") modeMeta.textContent=focusState.running?"FOCUS · STAY HERE":"FOCUS · 25 MIN";
-  else if(mode==="dream") modeMeta.textContent="GENERATIVE · "+(dreamMode===0?"TIME MORPH":"CONSTELLATION");
+  else if(mode==="dream") modeMeta.textContent="GENERATIVE · AUTO FLOW";
 }
 
 function animateEntrance(layer){
@@ -532,7 +533,6 @@ function updateActions(){
     mode === "weather" ? "weather:" + weather.loading :
     mode === "timer" ? "timer:" + timerState.running :
     mode === "focus" ? "focus:" + focusState.running :
-    mode === "dream" ? "dream:" + dreamMode :
     mode;
 
   if (nextToken === actionToken) return;
@@ -544,8 +544,6 @@ function updateActions(){
     modeActions.append(actionButton("−","timer-minus"),actionButton(timerState.running?"PAUSE":"START","timer-toggle",true),actionButton("RESET","timer-reset"),actionButton("+","timer-plus"));
   } else if(mode==="focus"){
     modeActions.append(actionButton(focusState.running?"PAUSE":"FOCUS","focus-toggle",true),actionButton("RESET","focus-reset"));
-  } else if(mode==="dream"){
-    modeActions.append(actionButton("MORPH","dream-morph",dreamMode===0),actionButton("FIELD","dream-field",dreamMode===1));
   }
   modeActions.classList.toggle("has-actions",modeActions.children.length>0);
 }
@@ -572,7 +570,7 @@ function updateAmbientWeather(){
   ambientWeather.replaceChildren();
   const family=weatherFamily(weather.code==null?3:weather.code);
   app.dataset.weather=family;
-  const count=family==="rain"?28:family==="snow"?24:family==="clear"?14:family==="storm"?22:12;
+  const count=family==="rain"?36:family==="snow"?30:family==="clear"?18:family==="storm"?30:18;
   for(let i=0;i<count;i++){
     const p=document.createElement("i");
     p.style.setProperty("--i",String(i));
@@ -588,40 +586,41 @@ function setupDreamParticles(){
   dreamDpr=Math.min(window.devicePixelRatio||1,2);
   dreamCanvas.width=Math.max(1,Math.floor(rect.width*dreamDpr));
   dreamCanvas.height=Math.max(1,Math.floor(rect.height*dreamDpr));
-  const count=Math.min(92,Math.max(64,Math.floor(rect.width/10)));
-  if(dreamParticles.length!==count){
-    dreamParticles=Array.from({length:count},(_,i)=>({
-      x:Math.random()*rect.width,y:Math.random()*rect.height,
-      vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,
-      seed:i*1.618
-    }));
-  }
+  const count=Math.min(84,Math.max(60,Math.floor(rect.width/11)));
+  dreamParticles=Array.from({length:count},(_,i)=>({
+    x:rect.width*(.15+.7*((i*37)%count)/count),
+    y:rect.height*(.18+.64*((i*19)%count)/count),
+    vx:Math.sin(i*1.7)*.14,
+    vy:Math.cos(i*1.3)*.14,
+    seed:i*1.618
+  }));
   dreamTargetKey="";
   dreamTargetCache=[];
 }
 
 function dreamTargets(text,w,h,count){
   const temp=document.createElement("canvas");
-  temp.width=700;temp.height=250;
+  temp.width=700;
+  temp.height=250;
   const ctx=temp.getContext("2d");
   ctx.clearRect(0,0,700,250);
   ctx.fillStyle="#fff";
-  ctx.font="800 170px ui-monospace, Menlo, monospace";
+  ctx.font="800 160px ui-monospace, Menlo, monospace";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  ctx.fillText(text,350,128);
+  ctx.fillText(text,350,126);
   const data=ctx.getImageData(0,0,700,250).data;
   const pts=[];
-  for(let y=12;y<238;y+=8){
-    for(let x=12;x<688;x+=8){
+  for(let y=18;y<232;y+=7){
+    for(let x=18;x<682;x+=7){
       if(data[(y*700+x)*4+3]>120) pts.push({x:x/700*w,y:y/250*h});
     }
   }
   if(!pts.length) return [];
-  return Array.from({length:count},(_,i)=>pts[(i*17)%pts.length]);
+  return Array.from({length:count},(_,i)=>pts[(i*23)%pts.length]);
 }
 
-function drawDream(){
+function drawDream(nowMs){
   if(mode!=="dream" || !dreamCanvas.isConnected){
     dreamFrame=0;
     return;
@@ -635,6 +634,10 @@ function drawDream(){
 
   if(!dreamCanvas.width || Math.abs(dreamCanvas.width/dreamDpr-rect.width)>2) setupDreamParticles();
 
+  if(!dreamStartedAt) dreamStartedAt=nowMs||performance.now();
+  const elapsed=(nowMs||performance.now())-dreamStartedAt;
+  dreamMode=Math.floor(elapsed/8000)%2;
+
   const dpr=dreamCanvas.width/rect.width;
   const ctx=dreamCanvas.getContext("2d");
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -643,37 +646,32 @@ function drawDream(){
   const fg=getComputedStyle(app).getPropertyValue("--fg").trim()||"#fff";
   ctx.fillStyle=fg;
   ctx.strokeStyle=fg;
-  ctx.lineWidth=.7;
-  dreamPhase+=.008;
+  ctx.lineWidth=.8;
+  dreamPhase+=.011;
 
-  let targets=dreamTargetCache;
-  if(dreamMode===0){
-    const now=new Date();
-    const timeKey=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    const nextKey=timeKey+"|"+Math.round(rect.width)+"|"+Math.round(rect.height)+"|"+dreamParticles.length;
-    dreamLastTimeKey=timeKey;
-    if(nextKey!==dreamTargetKey){
-      dreamTargetKey=nextKey;
-      dreamTargetCache=dreamTargets(timeKey,rect.width,rect.height,dreamParticles.length);
-    }
-    targets=dreamTargetCache;
+  const current=new Date();
+  const timeKey=String(current.getHours()).padStart(2,"0")+":"+String(current.getMinutes()).padStart(2,"0");
+  const cacheKey=timeKey+"|"+Math.round(rect.width)+"|"+Math.round(rect.height)+"|"+dreamParticles.length;
+  if(cacheKey!==dreamTargetKey){
+    dreamTargetKey=cacheKey;
+    dreamTargetCache=dreamTargets(timeKey,rect.width,rect.height,dreamParticles.length);
   }
 
+  const cx=rect.width/2;
+  const cy=rect.height/2;
+
   dreamParticles.forEach((p,i)=>{
-    if(dreamMode===0 && targets[i]){
-      p.x+=(targets[i].x-p.x)*.045;
-      p.y+=(targets[i].y-p.y)*.045;
+    if(dreamMode===0 && dreamTargetCache[i]){
+      const target=dreamTargetCache[i];
+      p.x+=(target.x-p.x)*.055;
+      p.y+=(target.y-p.y)*.055;
     }else{
-      p.vx+=Math.sin(dreamPhase*2+p.seed)*.0025;
-      p.vy+=Math.cos(dreamPhase*1.7+p.seed)*.0025;
-      p.vx*=.99;
-      p.vy*=.99;
-      p.x+=p.vx;
-      p.y+=p.vy;
-      if(p.x<0)p.x+=rect.width;
-      if(p.x>rect.width)p.x-=rect.width;
-      if(p.y<0)p.y+=rect.height;
-      if(p.y>rect.height)p.y-=rect.height;
+      const radius=Math.min(rect.width,rect.height)*(.18+(i%7)*.035);
+      const angle=dreamPhase*.55+p.seed*.9;
+      const tx=cx+Math.cos(angle)*radius;
+      const ty=cy+Math.sin(angle*1.17)*radius*.58;
+      p.x+=(tx-p.x)*.018;
+      p.y+=(ty-p.y)*.018;
     }
   });
 
@@ -682,8 +680,8 @@ function drawDream(){
     for(let j=i+1;j<dreamParticles.length;j++){
       const b=dreamParticles[j];
       const dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
-      if(d<52){
-        ctx.globalAlpha=(1-d/52)*.18;
+      if(d<64){
+        ctx.globalAlpha=(1-d/64)*.22;
         ctx.beginPath();
         ctx.moveTo(a.x,a.y);
         ctx.lineTo(b.x,b.y);
@@ -693,12 +691,17 @@ function drawDream(){
   }
 
   dreamParticles.forEach((p,i)=>{
-    const pulse=.65+.35*Math.sin(dreamPhase*5+p.seed);
-    ctx.globalAlpha=.32+.68*pulse;
+    const pulse=.6+.4*Math.sin(dreamPhase*4+p.seed);
+    ctx.globalAlpha=.42+.58*pulse;
     ctx.beginPath();
-    ctx.arc(p.x,p.y,1.7+(i%6===0?1.1:0),0,Math.PI*2);
+    ctx.arc(p.x,p.y,1.8+(i%8===0?1.3:0),0,Math.PI*2);
     ctx.fill();
   });
+
+  ctx.globalAlpha=.08;
+  ctx.beginPath();
+  ctx.arc(cx,cy,Math.min(rect.width,rect.height)*.34,0,Math.PI*2);
+  ctx.stroke();
   ctx.globalAlpha=1;
 
   dreamFrame=requestAnimationFrame(drawDream);
@@ -709,6 +712,7 @@ function updateSpecialMode(){
   clock.classList.toggle("hidden-for-special",mode==="dream");
 
   if(mode==="dream"){
+    dreamStartedAt=performance.now();
     setupDreamParticles();
     if(!dreamFrame) dreamFrame=requestAnimationFrame(drawDream);
   }else if(dreamFrame){
@@ -771,8 +775,6 @@ modeActions.addEventListener("click",e=>{
   if(a==="timer-reset") resetCountdown(timerState);
   if(a==="focus-toggle") toggleCountdown(focusState);
   if(a==="focus-reset") resetCountdown(focusState);
-  if(a==="dream-morph"){dreamMode=0;actionToken="";updateActions();updateMeta();}
-  if(a==="dream-field"){dreamMode=1;actionToken="";updateActions();updateMeta();}
   showControls();
 });
 styleButtons.forEach(b=>b.addEventListener("click",()=>{switchStyle(b.dataset.styleChoice);showControls();}));
