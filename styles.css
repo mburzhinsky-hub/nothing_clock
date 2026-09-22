@@ -1,18 +1,23 @@
 :root {
   color-scheme: dark light;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-  --ease: cubic-bezier(.2,.8,.2,1);
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-standard: cubic-bezier(.4,0,.2,1);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
   background: #050505;
   touch-action: manipulation;
+  overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -24,10 +29,11 @@ button {
 
 .app {
   --bg: #050505;
-  --fg: #f6f6f3;
-  --panel: rgba(22,22,22,.82);
-  --panel-border: rgba(255,255,255,.12);
-  --muted: rgba(255,255,255,.58);
+  --fg: #f5f5f2;
+  --panel: rgba(18,18,18,.76);
+  --panel-border: rgba(255,255,255,.11);
+  --muted: rgba(255,255,255,.52);
+  --segment-ghost: .055;
 
   position: fixed;
   inset: 0;
@@ -38,17 +44,25 @@ button {
     max(28px, env(safe-area-inset-right))
     max(20px, env(safe-area-inset-bottom))
     max(28px, env(safe-area-inset-left));
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255,255,255,.018), transparent 42%),
+    var(--bg);
   color: var(--fg);
-  transition: background-color .32s var(--ease), color .32s var(--ease);
+  transition:
+    background-color .42s var(--ease-out),
+    color .42s var(--ease-out);
 }
 
 .app.theme-light {
   --bg: #f3f3ef;
-  --fg: #090909;
-  --panel: rgba(247,247,243,.86);
-  --panel-border: rgba(0,0,0,.12);
-  --muted: rgba(0,0,0,.56);
+  --fg: #0a0a0a;
+  --panel: rgba(248,248,244,.8);
+  --panel-border: rgba(0,0,0,.1);
+  --muted: rgba(0,0,0,.52);
+  --segment-ghost: .045;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(0,0,0,.018), transparent 42%),
+    var(--bg);
 }
 
 .stage {
@@ -57,48 +71,101 @@ button {
   width: 100%;
   height: 100%;
   border: 0;
-  background: transparent;
-  color: inherit;
+  padding: 0;
   display: grid;
   place-items: center;
-  padding: 0;
+  background: transparent;
+  color: inherit;
   cursor: default;
 }
 
 .clock {
-  width: min(88vw, 1500px);
-  height: min(64vh, 520px);
+  width: min(90vw, 1540px);
+  height: min(68vh, 560px);
   overflow: visible;
   color: var(--fg);
-  filter: drop-shadow(0 0 .01px currentColor);
+  transform-origin: center;
+  will-change: transform, filter;
 }
 
-.clock [data-glyph] {
+.time-layer {
+  transform-box: fill-box;
   transform-origin: center;
+  will-change: transform, opacity, filter;
+}
+
+.digit {
+  color: var(--fg);
+}
+
+.glyph-pixel,
+.segment-piece,
+.colon > * {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity, filter;
+}
+
+.digit-dot .glyph-pixel {
+  shape-rendering: geometricPrecision;
+}
+
+.digit-hybrid .hybrid-piece {
+  shape-rendering: geometricPrecision;
+}
+
+.digit-segment .segment-piece {
+  filter: drop-shadow(0 0 0 currentColor);
+}
+
+.colon {
+  opacity: .95;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: colon-breathe 2s ease-in-out infinite;
+}
+
+.colon > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+@keyframes colon-breathe {
+  0%,
+  100% {
+    opacity: .92;
+    filter: blur(0);
+  }
+  50% {
+    opacity: .52;
+    filter: blur(.25px);
+  }
 }
 
 .controls {
   position: fixed;
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
-  transform: translate(-50%, 18px) scale(.98);
+  transform: translate(-50%, 22px) scale(.965);
   display: flex;
-  gap: 10px;
   align-items: center;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   border: 1px solid var(--panel-border);
-  border-radius: 24px;
+  border-radius: 22px;
   background: var(--panel);
-  backdrop-filter: blur(22px) saturate(1.25);
-  -webkit-backdrop-filter: blur(22px) saturate(1.25);
-  box-shadow: 0 14px 50px rgba(0,0,0,.18);
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  box-shadow:
+    0 18px 60px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.035);
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity .22s var(--ease),
-    transform .26s var(--ease),
-    background-color .32s var(--ease),
-    border-color .32s var(--ease);
+    opacity .22s var(--ease-out),
+    transform .32s var(--ease-out),
+    background-color .36s var(--ease-out),
+    border-color .36s var(--ease-out);
 }
 
 .app.controls-visible .controls {
@@ -109,7 +176,8 @@ button {
 
 .style-switcher {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
 }
 
 .chip,
@@ -118,39 +186,48 @@ button {
   color: var(--fg);
   background: transparent;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chip {
-  min-width: 86px;
+  min-width: 88px;
   height: 50px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: 15px;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 24px 1fr;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  letter-spacing: .04em;
   color: var(--muted);
-  transition: background-color .18s var(--ease), color .18s var(--ease), transform .18s var(--ease);
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: .045em;
+  transition:
+    color .22s var(--ease-out),
+    background-color .22s var(--ease-out),
+    transform .18s var(--ease-out);
 }
 
 .chip:active,
 .theme-toggle:active {
-  transform: scale(.96);
+  transform: scale(.94);
 }
 
 .chip.active {
-  background: var(--fg);
   color: var(--bg);
+  background: var(--fg);
 }
 
 .chip-icon {
   width: 24px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -2px;
   text-align: center;
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: -2px;
+}
+
+.dot-icon {
+  letter-spacing: -1px;
 }
 
 .segment-icon {
@@ -163,26 +240,30 @@ button {
 }
 
 .theme-toggle {
+  position: relative;
   width: 50px;
   height: 50px;
   border-left: 1px solid var(--panel-border);
   display: grid;
   place-items: center;
+  transition:
+    transform .18s var(--ease-out),
+    border-color .36s var(--ease-out);
 }
 
 .theme-dot {
-  width: 20px;
-  height: 20px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
   position: relative;
+  width: 19px;
+  height: 19px;
   overflow: hidden;
+  border: 1.8px solid currentColor;
+  border-radius: 50%;
 }
 
 .theme-dot::after {
   content: "";
   position: absolute;
-  inset: 0 50% 0 0;
+  inset: -1px 50% -1px -1px;
   background: currentColor;
 }
 
@@ -190,28 +271,33 @@ button {
   position: fixed;
   top: max(16px, env(safe-area-inset-top));
   left: 50%;
-  transform: translate(-50%, -8px);
+  transform: translate(-50%, -8px) scale(.98);
   padding: 8px 12px;
   border: 1px solid var(--panel-border);
   border-radius: 999px;
   background: var(--panel);
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: .04em;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .055em;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s var(--ease), transform .18s var(--ease);
+  transition:
+    opacity .18s var(--ease-out),
+    transform .24s var(--ease-out);
 }
 
 .toast.show {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0) scale(1);
 }
 
 @media (max-width: 760px) {
   .clock {
     width: 94vw;
-    height: 56vh;
+    height: 60vh;
   }
 
   .controls {
@@ -220,8 +306,9 @@ button {
 
   .chip {
     min-width: 0;
-    width: 78px;
+    width: 66px;
     padding: 0 10px;
+    grid-template-columns: 1fr;
   }
 
   .chip span:last-child {
@@ -236,13 +323,17 @@ button {
 @media (orientation: portrait) {
   .clock {
     width: 92vw;
-    height: 36vh;
+    height: 38vh;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
     transition-duration: .001ms !important;
     animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
