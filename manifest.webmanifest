@@ -1,7 +1,7 @@
 {
   "name": "Glyph Ambient",
   "short_name": "Glyph",
-  "description": "Minimal ambient display with clock, date, weather, timer, focus, launcher and generative dream modes.",
+  "description": "Minimal ambient display with clock, date, weather, timer, focus and generative dream modes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
